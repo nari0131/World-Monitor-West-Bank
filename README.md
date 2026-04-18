@@ -43,7 +43,7 @@
 - **Country Intelligence Index** — composite risk scoring across 12 signal categories
 - **Finance radar** — 92 stock exchanges, commodities, crypto, and 7-signal market composite
 - **Local AI** — run everything with Ollama, no API keys required
-- **5 site variants** from a single codebase (world, tech, finance, commodity, happy)
+- **6 site variants** from a single codebase (world, tech, finance, commodity, happy, westbank)
 - **Native desktop app** (Tauri 2) for macOS, Windows, and Linux
 - **21 languages** with native-language feeds and RTL support
 
@@ -69,6 +69,7 @@ npm run dev:tech       # tech.worldmonitor.app
 npm run dev:finance    # finance.worldmonitor.app
 npm run dev:commodity  # commodity.worldmonitor.app
 npm run dev:happy      # happy.worldmonitor.app
+npm run dev:westbank   # West Bank-focused variant
 ```
 
 See the **[self-hosting guide](https://www.worldmonitor.app/docs/getting-started)** for deployment options (Vercel, Docker, static).

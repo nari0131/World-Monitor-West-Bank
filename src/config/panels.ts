@@ -901,6 +901,82 @@ const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
 };
 
 // ============================================
+// WEST BANK VARIANT (Israel + OPT)
+// ============================================
+const WESTBANK_PANELS: Record<string, PanelConfig> = {
+  map: { name: 'Israel + West Bank Map', enabled: true, priority: 1 },
+  'westbank-digest': { name: 'West Bank Digest', enabled: true, priority: 1 },
+  westbank: { name: 'West Bank Local Media', enabled: true, priority: 1 },
+  'live-news': { name: 'Regional Live Feeds', enabled: true, priority: 1 },
+  'gdelt-intel': { name: 'Structured Events', enabled: true, priority: 1, ...(_desktop && { premium: 'enhanced' as const }) },
+  'oref-sirens': { name: 'Israel Sirens', enabled: true, priority: 2, ...(_desktop && { premium: 'locked' as const }) },
+  'telegram-intel': { name: 'Telegram Intel', enabled: true, priority: 2, ...(_desktop && { premium: 'locked' as const }) },
+  monitors: { name: 'My Monitors', enabled: true, priority: 2 },
+};
+
+const WESTBANK_MAP_LAYERS: MapLayers = {
+  iranAttacks: false,
+  gpsJamming: false,
+  satellites: false,
+  conflicts: true,
+  bases: false,
+  cables: false,
+  pipelines: false,
+  hotspots: true,
+  ais: false,
+  nuclear: false,
+  irradiators: false,
+  radiationWatch: false,
+  sanctions: false,
+  weather: false,
+  economic: false,
+  waterways: false,
+  outages: false,
+  cyberThreats: false,
+  datacenters: false,
+  protests: true,
+  flights: false,
+  military: false,
+  natural: false,
+  spaceports: false,
+  minerals: false,
+  fires: false,
+  ucdpEvents: true,
+  displacement: false,
+  climate: false,
+  startupHubs: false,
+  cloudRegions: false,
+  accelerators: false,
+  techHQs: false,
+  techEvents: false,
+  stockExchanges: false,
+  financialCenters: false,
+  centralBanks: false,
+  commodityHubs: false,
+  gulfInvestments: false,
+  positiveEvents: false,
+  kindness: false,
+  happiness: false,
+  speciesRecovery: false,
+  renewableInstallations: false,
+  tradeRoutes: false,
+  ciiChoropleth: false,
+  resilienceScore: false,
+  dayNight: false,
+  miningSites: false,
+  processingPlants: false,
+  commodityPorts: false,
+  webcams: false,
+  diseaseOutbreaks: false,
+};
+
+const WESTBANK_MOBILE_MAP_LAYERS: MapLayers = {
+  ...WESTBANK_MAP_LAYERS,
+  protests: false,
+  ucdpEvents: false,
+};
+
+// ============================================
 // UNIFIED PANEL REGISTRY
 // ============================================
 
@@ -908,6 +984,7 @@ const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
 export const ALL_PANELS: Record<string, PanelConfig> = {
   ...HAPPY_PANELS,
   ...COMMODITY_PANELS,
+  ...WESTBANK_PANELS,
   ...TECH_PANELS,
   ...FINANCE_PANELS,
   ...FULL_PANELS,
@@ -920,6 +997,7 @@ export const VARIANT_DEFAULTS: Record<string, string[]> = {
   finance:   Object.keys(FINANCE_PANELS),
   commodity: Object.keys(COMMODITY_PANELS),
   happy:     Object.keys(HAPPY_PANELS),
+  westbank:  Object.keys(WESTBANK_PANELS),
 };
 
 /**
@@ -944,6 +1022,13 @@ export const VARIANT_PANEL_OVERRIDES: Partial<Record<string, Partial<Record<stri
   },
   happy: {
     map:         { name: 'World Map' },
+  },
+  westbank: {
+    map:            { name: 'Israel + West Bank Map' },
+    'live-news':    { name: 'Regional Live Feeds' },
+    'gdelt-intel':  { name: 'Structured Events' },
+    'oref-sirens':  { name: 'Israel Sirens' },
+    'telegram-intel': { name: 'Telegram Intel' },
   },
 };
 
@@ -994,6 +1079,8 @@ export const DEFAULT_MAP_LAYERS = SITE_VARIANT === 'happy'
     ? TECH_MAP_LAYERS 
     : SITE_VARIANT === 'finance' 
       ? FINANCE_MAP_LAYERS 
+      : SITE_VARIANT === 'westbank'
+        ? WESTBANK_MAP_LAYERS
       : SITE_VARIANT === 'commodity'
         ? COMMODITY_MAP_LAYERS
         : FULL_MAP_LAYERS;
@@ -1004,6 +1091,8 @@ export const MOBILE_DEFAULT_MAP_LAYERS = SITE_VARIANT === 'happy'
     ? TECH_MOBILE_MAP_LAYERS 
     : SITE_VARIANT === 'finance' 
       ? FINANCE_MOBILE_MAP_LAYERS 
+      : SITE_VARIANT === 'westbank'
+        ? WESTBANK_MOBILE_MAP_LAYERS
       : SITE_VARIANT === 'commodity'
         ? COMMODITY_MOBILE_MAP_LAYERS
         : FULL_MOBILE_MAP_LAYERS;
@@ -1044,6 +1133,11 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   correlation: {
     labelKey: 'header.panelCatCorrelation',
     panelKeys: ['military-correlation', 'escalation-correlation', 'economic-correlation', 'disaster-correlation'],
+  },
+  westbankFocus: {
+    labelKey: 'header.panelCatIntelligence',
+    panelKeys: ['westbank-digest', 'westbank', 'gdelt-intel', 'oref-sirens', 'telegram-intel'],
+    variants: ['westbank'],
   },
   regionalNews: {
     labelKey: 'header.panelCatRegionalNews',

@@ -31,7 +31,7 @@ const TECH_APIS = new Set([
 ]);
 
 const WORLD_FEEDS = new Set([
-  'Politics', 'Middleeast', 'Tech', 'Ai', 'Finance',
+  'Politics', 'Middleeast', 'West Bank Local Media', 'Tech', 'Ai', 'Finance',
   'Gov', 'Intel', 'Layoffs', 'Thinktanks', 'Energy',
   'Polymarket', 'Weather', 'NetBlocks', 'Shipping', 'Military',
   'Cyber Threats', 'GPS Jam'

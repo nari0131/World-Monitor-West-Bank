@@ -79,6 +79,7 @@ import {
   WsbTickerScannerPanel,
   AAIISentimentPanel,
   EnergyCrisisPanel,
+  WestBankDigestPanel,
 } from '@/components';
 import { SatelliteFiresPanel } from '@/components/SatelliteFiresPanel';
 import { focusInvestmentOnMap } from '@/services/investments-focus';
@@ -114,6 +115,7 @@ import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import type { AuthSession } from '@/services/auth-state';
 import { PanelGateReason, getPanelGateReason, hasPremiumAccess } from '@/services/panel-gating';
 import type { Panel } from '@/components/Panel';
+import { selectWestBankDigestItems, WESTBANK_DEFAULT_VIEW } from '@/config/westbank-focus';
 
 /** Panels that require premium access on web. Auth-based gating applies to these. */
 const WEB_PREMIUM_PANELS = new Set([
@@ -375,6 +377,7 @@ export class PanelLayoutManager implements AppModule {
         const inIframe = window.self !== window.top;
         const vHref = (v: string, prod: string) => local || SITE_VARIANT === v ? '#' : prod;
         const vTarget = (v: string) => !local && SITE_VARIANT !== v && inIframe ? 'target="_blank" rel="noopener"' : '';
+        const showWestBankVariant = local || SITE_VARIANT === 'westbank';
         return `
             <a href="${vHref('full', 'https://worldmonitor.app')}"
                class="variant-option ${SITE_VARIANT === 'full' ? 'active' : ''}"
@@ -419,7 +422,17 @@ export class PanelLayoutManager implements AppModule {
                title="Good News${SITE_VARIANT === 'happy' ? ` ${t('common.currentVariant')}` : ''}">
               <span class="variant-icon">☀️</span>
               <span class="variant-label">Good News</span>
-            </a>`;
+            </a>
+            ${showWestBankVariant ? `
+            <span class="variant-divider"></span>
+            <a href="${vHref('westbank', 'https://westbank.worldmonitor.app')}"
+               class="variant-option ${SITE_VARIANT === 'westbank' ? 'active' : ''}"
+               data-variant="westbank"
+               ${vTarget('westbank')}
+               title="West Bank${SITE_VARIANT === 'westbank' ? ` ${t('common.currentVariant')}` : ''}">
+              <span class="variant-icon">📍</span>
+              <span class="variant-label">West Bank</span>
+            </a>` : ''}`;
       })()}</div>
           <span class="logo">MONITOR</span><span class="logo-mobile">World Monitor</span><span class="version">v${__APP_VERSION__}</span>${BETA_MODE ? '<span class="beta-badge">BETA</span>' : ''}
           <a href="https://x.com/eliehabib" target="_blank" rel="noopener" class="credit-link">
@@ -478,6 +491,9 @@ export class PanelLayoutManager implements AppModule {
           { key: 'finance', icon: '📈', label: t('header.finance') },
           { key: 'commodity', icon: '⛏️', label: t('header.commodity') },
           { key: 'happy', icon: '☀️', label: 'Good News' },
+          ...(this.ctx.isDesktopApp || location.hostname === 'localhost' || location.hostname === '127.0.0.1' || SITE_VARIANT === 'westbank'
+            ? [{ key: 'westbank', icon: '📍', label: 'West Bank' }]
+            : []),
         ];
         return variants.map(v =>
           `<button class="mobile-menu-item mobile-menu-variant ${v.key === SITE_VARIANT ? 'active' : ''}" data-variant="${v.key}">
@@ -539,7 +555,7 @@ export class PanelLayoutManager implements AppModule {
         <div class="map-section" id="mapSection">
           <div class="panel-header">
             <div class="panel-header-left">
-              <span class="panel-title">${SITE_VARIANT === 'tech' ? t('panels.techMap') : SITE_VARIANT === 'happy' ? 'Good News Map' : t('panels.map')}</span>
+              <span class="panel-title">${SITE_VARIANT === 'tech' ? t('panels.techMap') : SITE_VARIANT === 'happy' ? 'Good News Map' : SITE_VARIANT === 'westbank' ? 'Israel + West Bank Map' : t('panels.map')}</span>
             </div>
             <span class="header-clock" id="headerClock" translate="no"></span>
             <div class="map-header-actions">
@@ -1181,6 +1197,7 @@ export class PanelLayoutManager implements AppModule {
     this.createPanel('hormuz-tracker', () => new HormuzPanel());
     this.createPanel('etf-flows', () => new ETFFlowsPanel());
     this.createPanel('stablecoins', () => new StablecoinPanel());
+    this.createPanel('westbank-digest', () => new WestBankDigestPanel());
 
     if (this.ctx.isDesktopApp) {
       const runtimeConfigPanel = new RuntimeConfigPanel({ mode: 'alert' });
@@ -1481,6 +1498,12 @@ export class PanelLayoutManager implements AppModule {
       }
       panel.renderNews(filtered);
     });
+
+    if (SITE_VARIANT === 'westbank') {
+      const digestItems = selectWestBankDigestItems(this.filterItemsByTimeRange(this.ctx.allNews));
+      const digestPanel = this.ctx.panels['westbank-digest'] as WestBankDigestPanel | undefined;
+      digestPanel?.setItems(digestItems);
+    }
   }
 
   private filterItemsByTimeRange(items: import('@/types').NewsItem[], range: import('@/components').TimeRange = this.ctx.currentTimeRange): import('@/types').NewsItem[] {
@@ -1507,7 +1530,14 @@ export class PanelLayoutManager implements AppModule {
   }
 
   private applyInitialUrlState(): void {
-    if (!this.ctx.initialUrlState || !this.ctx.map) return;
+    if (!this.ctx.map) return;
+
+    if (!this.ctx.initialUrlState) {
+      if (SITE_VARIANT === 'westbank') {
+        this.ctx.map.setCenter(WESTBANK_DEFAULT_VIEW.lat, WESTBANK_DEFAULT_VIEW.lon, WESTBANK_DEFAULT_VIEW.zoom);
+      }
+      return;
+    }
 
     const { view, zoom, lat, lon, timeRange, layers } = this.ctx.initialUrlState;
 

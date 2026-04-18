@@ -23184,3 +23184,95 @@ body.map-width-resizing {
 .ecp-source-link:hover {
   text-decoration: underline;
 }
+
+.westbank-digest {
+  display: grid;
+  gap: 12px;
+}
+
+.westbank-digest-summary,
+.westbank-digest-watchlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.westbank-digest-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+}
+
+.westbank-digest-list {
+  display: grid;
+  gap: 10px;
+}
+
+.westbank-digest-card {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+}
+
+.westbank-digest-card-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f2f4f7;
+  background: linear-gradient(135deg, #5470ff, #243784);
+}
+
+.westbank-digest-card-body {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.westbank-digest-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.westbank-digest-title:hover {
+  text-decoration: underline;
+}
+
+.westbank-digest-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.westbank-digest-meta-item {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.westbank-digest-empty {
+  display: grid;
+  gap: 12px;
+}
+
+.westbank-digest-empty-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}

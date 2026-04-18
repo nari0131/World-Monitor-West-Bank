@@ -882,6 +882,17 @@ const COMMODITY_FEEDS: Record<string, Feed[]> = {
   ],
 };
 
+const WESTBANK_FEEDS: Record<string, Feed[]> = {
+  westbank: [
+    { name: 'WAFA English', url: rss('https://news.google.com/rss/search?q=site:english.wafa.ps+("West+Bank"+OR+Jenin+OR+Nablus+OR+Ramallah+OR+Hebron+OR+Bethlehem+OR+Tulkarm+OR+Tubas+OR+Qalqilya+OR+Jericho+OR+Salfit+OR+"East+Jerusalem")+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Maan News', url: rss('https://news.google.com/rss/search?q=site:maannews.net+("West+Bank"+OR+Jenin+OR+Nablus+OR+Ramallah+OR+Hebron+OR+Bethlehem+OR+Tulkarm+OR+Tubas+OR+Qalqilya+OR+Jericho+OR+Salfit)+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: '972 Magazine', url: rss('https://news.google.com/rss/search?q=site:972mag.com+("West+Bank"+OR+settler+OR+settlement+OR+Jenin+OR+Nablus+OR+Ramallah)+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Times of Israel WB', url: rss('https://news.google.com/rss/search?q=site:timesofisrael.com+("West+Bank"+OR+settler+OR+settlement+OR+Jenin+OR+Nablus+OR+Hebron+OR+Ramallah)+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Jerusalem Post WB', url: rss('https://news.google.com/rss/search?q=site:jpost.com+("West+Bank"+OR+settler+OR+settlement+OR+Jenin+OR+Nablus+OR+Hebron+OR+Ramallah)+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Palestine Chronicle', url: rss('https://news.google.com/rss/search?q=site:palestinechronicle.com+("West+Bank"+OR+Jenin+OR+Nablus+OR+Hebron+OR+Ramallah+OR+Bethlehem)+when:7d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+};
+
 // Variant-aware exports
 export const FEEDS = SITE_VARIANT === 'tech'
   ? TECH_FEEDS
@@ -891,14 +902,16 @@ export const FEEDS = SITE_VARIANT === 'tech'
       ? HAPPY_FEEDS
       : SITE_VARIANT === 'commodity'
         ? COMMODITY_FEEDS
-        : FULL_FEEDS;
+        : SITE_VARIANT === 'westbank'
+          ? WESTBANK_FEEDS
+          : FULL_FEEDS;
 
 export const SOURCE_REGION_MAP: Record<string, { labelKey: string; feedKeys: string[] }> = {
   // Full (geopolitical) variant regions
   worldwide: { labelKey: 'header.sourceRegionWorldwide', feedKeys: ['politics', 'crisis'] },
   us: { labelKey: 'header.sourceRegionUS', feedKeys: ['us', 'gov'] },
   europe: { labelKey: 'header.sourceRegionEurope', feedKeys: ['europe'] },
-  middleeast: { labelKey: 'header.sourceRegionMiddleEast', feedKeys: ['middleeast'] },
+  middleeast: { labelKey: 'header.sourceRegionMiddleEast', feedKeys: SITE_VARIANT === 'westbank' ? ['westbank'] : ['middleeast'] },
   africa: { labelKey: 'header.sourceRegionAfrica', feedKeys: ['africa'] },
   latam: { labelKey: 'header.sourceRegionLatAm', feedKeys: ['latam'] },
   asia: { labelKey: 'header.sourceRegionAsiaPacific', feedKeys: ['asia'] },

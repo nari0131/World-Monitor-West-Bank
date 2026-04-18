@@ -15,6 +15,7 @@ import {
 } from '@/config';
 import { INTEL_HOTSPOTS, CONFLICT_ZONES } from '@/config/geo';
 import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
+import { selectWestBankDigestItems } from '@/config/westbank-focus';
 import {
   fetchCategoryFeeds,
   getFeedFailures,
@@ -867,6 +868,12 @@ export class DataLoaderManager implements AppModule {
     panel.renderNews(filteredItems);
   }
 
+  private getFeedStatusName(category: string): string {
+    return this.ctx.panelSettings[category]?.name
+      ?? this.ctx.panelSettings[`${category}-news`]?.name
+      ?? category.charAt(0).toUpperCase() + category.slice(1);
+  }
+
   applyTimeRangeFilterToNewsPanels(): void {
     Object.entries(this.ctx.newsByCategory).forEach(([category, items]) => {
       this.renderNewsForCategory(category, items);
@@ -885,7 +892,7 @@ export class DataLoaderManager implements AppModule {
       if (enabledFeeds.length === 0) {
         delete this.ctx.newsByCategory[category];
         if (panel) panel.showError(t('common.allSourcesDisabled'));
-        this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+        this.ctx.statusPanel?.updateFeed(this.getFeedStatusName(category), {
           status: 'ok',
           itemCount: 0,
         });
@@ -910,7 +917,7 @@ export class DataLoaderManager implements AppModule {
         this.flashMapForNews(items);
         this.renderNewsForCategory(category, items);
 
-        this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+        this.ctx.statusPanel?.updateFeed(this.getFeedStatusName(category), {
           status: 'ok',
           itemCount: items.length,
         });
@@ -964,7 +971,7 @@ export class DataLoaderManager implements AppModule {
       if (staleItems.length > 0) {
         console.warn(`[News] Digest missing for "${category}", serving stale headlines (${staleItems.length})`);
         this.renderNewsForCategory(category, staleItems);
-        this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+        this.ctx.statusPanel?.updateFeed(this.getFeedStatusName(category), {
           status: 'ok',
           itemCount: staleItems.length,
         });
@@ -974,7 +981,7 @@ export class DataLoaderManager implements AppModule {
       if (!this.isPerFeedFallbackEnabled()) {
         console.warn(`[News] Digest missing for "${category}", limited per-feed fallback disabled`);
         this.renderNewsForCategory(category, []);
-        this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+        this.ctx.statusPanel?.updateFeed(this.getFeedStatusName(category), {
           status: 'error',
           errorMessage: 'Digest unavailable',
         });
@@ -1021,7 +1028,7 @@ export class DataLoaderManager implements AppModule {
         } catch (e) { console.warn(`[Baseline] news:${category} write failed:`, e); }
       }
 
-      this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+      this.ctx.statusPanel?.updateFeed(this.getFeedStatusName(category), {
         status: 'ok',
         itemCount: items.length,
       });
@@ -1029,7 +1036,7 @@ export class DataLoaderManager implements AppModule {
 
       return items;
     } catch (error) {
-      this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+      this.ctx.statusPanel?.updateFeed(this.getFeedStatusName(category), {
         status: 'error',
         errorMessage: String(error),
       });
@@ -1160,6 +1167,10 @@ export class DataLoaderManager implements AppModule {
     this.ctx.allNews = collectedNews;
     this.ctx.initialLoadComplete = true;
     mountCommunityWidget();
+
+    if (SITE_VARIANT === 'westbank') {
+      this.callPanel('westbank-digest', 'setItems', selectWestBankDigestItems(this.filterItemsByTimeRange(this.ctx.allNews)));
+    }
 
     this.ctx.map?.updateHotspotActivity(this.ctx.allNews);
 
