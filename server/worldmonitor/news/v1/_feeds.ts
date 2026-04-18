@@ -414,6 +414,17 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Shareable', url: 'https://www.shareable.net/feed/' },
     ],
   },
+
+  westbank: {
+    westbank: [
+      { name: 'WAFA English', url: gn('site:english.wafa.ps ("West Bank" OR Jenin OR Nablus OR Ramallah OR Hebron OR Bethlehem OR Tulkarm OR Tubas OR Qalqilya OR Jericho OR Salfit OR "East Jerusalem") when:7d') },
+      { name: 'Maan News', url: gn('site:maannews.net ("West Bank" OR Jenin OR Nablus OR Ramallah OR Hebron OR Bethlehem OR Tulkarm OR Tubas OR Qalqilya OR Jericho OR Salfit) when:7d') },
+      { name: '972 Magazine', url: gn('site:972mag.com ("West Bank" OR settler OR settlement OR Jenin OR Nablus OR Ramallah) when:14d') },
+      { name: 'Times of Israel WB', url: gn('site:timesofisrael.com ("West Bank" OR settler OR settlement OR Jenin OR Nablus OR Hebron OR Ramallah) when:7d') },
+      { name: 'Jerusalem Post WB', url: gn('site:jpost.com ("West Bank" OR settler OR settlement OR Jenin OR Nablus OR Hebron OR Ramallah) when:7d') },
+      { name: 'Palestine Chronicle', url: gn('site:palestinechronicle.com ("West Bank" OR Jenin OR Nablus OR Hebron OR Ramallah OR Bethlehem) when:7d') },
+    ],
+  },
 };
 
 export const INTEL_SOURCES: ServerFeed[] = [

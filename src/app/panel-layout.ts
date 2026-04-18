@@ -425,7 +425,7 @@ export class PanelLayoutManager implements AppModule {
             </a>
             ${showWestBankVariant ? `
             <span class="variant-divider"></span>
-            <a href="${vHref('westbank', 'https://westbank.worldmonitor.app')}"
+            <a href="${vHref('westbank', 'https://world-monitor-west-bank.vercel.app')}"
                class="variant-option ${SITE_VARIANT === 'westbank' ? 'active' : ''}"
                data-variant="westbank"
                ${vTarget('westbank')}

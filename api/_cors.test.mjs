@@ -27,6 +27,20 @@ test('allows desktop Tauri origins', () => {
   }
 });
 
+test('allows the deployed west bank vercel origins', () => {
+  const origins = [
+    'https://world-monitor-west-bank.vercel.app',
+    'https://world-monitor-west-bank-a8kxio3w1-nari0131s-projects.vercel.app',
+  ];
+
+  for (const origin of origins) {
+    const req = makeRequest(origin);
+    assert.equal(isDisallowedOrigin(req), false, `origin should be allowed: ${origin}`);
+    const cors = getCorsHeaders(req);
+    assert.equal(cors['Access-Control-Allow-Origin'], origin);
+  }
+});
+
 test('rejects unrelated external origins', () => {
   const req = makeRequest('https://evil.example.com');
   assert.equal(isDisallowedOrigin(req), true);
