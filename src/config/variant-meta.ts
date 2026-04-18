@@ -131,7 +131,7 @@ export const VARIANT_META: { full: VariantMeta; [k: string]: VariantMeta } = {
     title: 'West Bank Monitor - Real-Time West Bank Situational Awareness',
     description: 'A West Bank-focused World Monitor variant for local media tracking, Telegram, sirens, and structured event monitoring across Israel and the occupied Palestinian territories.',
     keywords: 'west bank monitor, jenin, nablus, ramallah, hebron, settlements, checkpoint incidents, local media, telegram intel, oref, gdelt, acled, osint, israel palestine dashboard',
-    url: 'https://westbank.worldmonitor.app/',
+    url: 'https://world-monitor-west-bank.vercel.app/',
     siteName: 'West Bank Monitor',
     shortName: 'WestBankMonitor',
     subject: 'West Bank-first situational awareness and source-attributed monitoring',
