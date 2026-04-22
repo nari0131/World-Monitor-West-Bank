@@ -353,6 +353,39 @@ const WESTBANK_PLACES: WestBankPlaceDefinition[] = [
   },
 ];
 
+const ITEM_LIMIT_PER_FEED = 5;
+const FEED_TIMEOUT_MS = 8_000;
+const RSS_ACCEPT = 'application/rss+xml, application/xml, text/xml, */*';
+const CHROME_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
+
+const WESTBANK_FEED_QUERIES = [
+  {
+    name: 'WAFA English',
+    query: 'site:english.wafa.ps ("West Bank" OR Jenin OR Nablus OR Ramallah OR Hebron OR Bethlehem OR Tulkarm OR Tubas OR Qalqilya OR Jericho OR Salfit OR "East Jerusalem") when:7d',
+  },
+  {
+    name: 'Maan News',
+    query: 'site:maannews.net ("West Bank" OR Jenin OR Nablus OR Ramallah OR Hebron OR Bethlehem OR Tulkarm OR Tubas OR Qalqilya OR Jericho OR Salfit) when:7d',
+  },
+  {
+    name: '972 Magazine',
+    query: 'site:972mag.com ("West Bank" OR settler OR settlement OR Jenin OR Nablus OR Ramallah) when:14d',
+  },
+  {
+    name: 'Times of Israel WB',
+    query: 'site:timesofisrael.com ("West Bank" OR settler OR settlement OR Jenin OR Nablus OR Hebron OR Ramallah) when:7d',
+  },
+  {
+    name: 'Jerusalem Post WB',
+    query: 'site:jpost.com ("West Bank" OR settler OR settlement OR Jenin OR Nablus OR Hebron OR Ramallah) when:7d',
+  },
+  {
+    name: 'Palestine Chronicle',
+    query: 'site:palestinechronicle.com ("West Bank" OR Jenin OR Nablus OR Hebron OR Ramallah OR Bethlehem) when:7d',
+  },
+] as const;
+
 const THREAT_PRIORITY: Record<WestBankThreatLevel, number> = {
   critical: 5,
   high: 4,
@@ -944,7 +977,125 @@ function getOperatorApiKey(): string {
   return validKey ?? '';
 }
 
-async function fetchWestBankSeedDigest(req: NodeRequest, lang: string): Promise<SeedDigest> {
+function getGoogleNewsLocale(lang: string): {
+  hl: string;
+  gl: string;
+  ceid: string;
+} {
+  if (lang.toLowerCase().startsWith('ar')) {
+    return { hl: 'ar', gl: 'PS', ceid: 'PS:ar' };
+  }
+
+  return { hl: 'en-US', gl: 'US', ceid: 'US:en' };
+}
+
+function buildGoogleNewsRssUrl(query: string, lang: string): string {
+  const locale = getGoogleNewsLocale(lang);
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${encodeURIComponent(locale.hl)}&gl=${encodeURIComponent(locale.gl)}&ceid=${encodeURIComponent(locale.ceid)}`;
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+function extractTag(block: string, tag: string): string {
+  const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return match?.[1] ? decodeXmlEntities(match[1]) : '';
+}
+
+async function fetchRssText(url: string, lang: string): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: RSS_ACCEPT,
+        'Accept-Language': getGoogleNewsLocale(lang).hl,
+        'User-Agent': CHROME_UA,
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`RSS HTTP ${response.status}`);
+    }
+
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseRssItems(sourceName: string, xml: string): SeedDigestItem[] {
+  const itemMatches = [...xml.matchAll(/<item[\s\S]*?>([\s\S]*?)<\/item>/gi)];
+  const entryMatches = itemMatches.length > 0
+    ? []
+    : [...xml.matchAll(/<entry[\s\S]*?>([\s\S]*?)<\/entry>/gi)];
+  const matches = itemMatches.length > 0 ? itemMatches : entryMatches;
+  const items: SeedDigestItem[] = [];
+
+  for (const match of matches.slice(0, ITEM_LIMIT_PER_FEED)) {
+    const block = match[1] ?? '';
+    const title = extractTag(block, 'title');
+    if (!title) continue;
+
+    let link = extractTag(block, 'link');
+    if (!link) {
+      const hrefMatch = block.match(/<link[^>]+href=["']([^"']+)["']/i);
+      link = hrefMatch?.[1] ?? '';
+    }
+    if (!/^https?:\/\//i.test(link)) continue;
+
+    const pubDateRaw = extractTag(block, 'pubDate') || extractTag(block, 'published') || extractTag(block, 'updated');
+    const publishedAt = Date.parse(pubDateRaw || '');
+
+    items.push({
+      source: sourceName,
+      title,
+      link,
+      publishedAt: Number.isFinite(publishedAt) ? publishedAt : Date.now(),
+    });
+  }
+
+  return items;
+}
+
+async function fetchWestBankSeedDigestFromRss(lang: string): Promise<SeedDigest> {
+  const feedStatuses: Record<string, string> = {};
+  const feedItems = await Promise.all(WESTBANK_FEED_QUERIES.map(async (feed) => {
+    try {
+      const xml = await fetchRssText(buildGoogleNewsRssUrl(feed.query, lang), lang);
+      const items = parseRssItems(feed.name, xml);
+      feedStatuses[feed.name] = items.length > 0 ? 'ok' : 'empty';
+      return items;
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : 'digest_unavailable';
+      feedStatuses[feed.name] = message;
+      return [];
+    }
+  }));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    feedStatuses,
+    categories: {
+      westbank: {
+        items: feedItems.flat(),
+      },
+    },
+  };
+}
+
+async function fetchWestBankSeedDigestFromGateway(req: NodeRequest, lang: string): Promise<SeedDigest> {
   const origin = getRequestOrigin(req);
   const url = new URL('/api/news/v1/list-feed-digest', origin);
   url.searchParams.set('variant', 'westbank');
@@ -966,6 +1117,14 @@ async function fetchWestBankSeedDigest(req: NodeRequest, lang: string): Promise<
   }
 
   return await response.json() as SeedDigest;
+}
+
+async function fetchWestBankSeedDigest(req: NodeRequest, lang: string): Promise<SeedDigest> {
+  try {
+    return await fetchWestBankSeedDigestFromGateway(req, lang);
+  } catch {
+    return fetchWestBankSeedDigestFromRss(lang);
+  }
 }
 
 export default async function handler(req: NodeRequest, res: NodeResponse): Promise<void> {
