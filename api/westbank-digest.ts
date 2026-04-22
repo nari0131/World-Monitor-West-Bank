@@ -939,7 +939,11 @@ async function fetchWestBankSeedDigest(req: NodeRequest, lang: string): Promise<
   url.searchParams.set('lang', lang);
 
   const response = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      Origin: origin,
+      Referer: `${origin}/`,
+    },
     cache: 'no-store',
   });
 
