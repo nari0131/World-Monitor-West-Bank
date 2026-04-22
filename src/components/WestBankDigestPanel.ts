@@ -9,6 +9,7 @@ import type {
 } from '@/types';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { extractWestBankPlaces, extractWestBankPlacesFromCluster, WESTBANK_WATCHLIST } from '@/config/westbank-focus';
+import { getWestBankDigestMapTarget, isLowConfidenceSection } from './westbank-digest-helpers';
 
 const THREAT_LABELS: Record<ThreatLevel, string> = {
   critical: 'Critical',
@@ -65,6 +66,8 @@ function renderHealthChip(health: WestBankSourceHealth): string {
 }
 
 export class WestBankDigestPanel extends Panel {
+  private onMapNavigate?: (lat: number, lon: number) => void;
+
   constructor() {
     super({
       id: 'westbank-digest',
@@ -73,6 +76,20 @@ export class WestBankDigestPanel extends Panel {
       trackActivity: false,
     });
     this.setContent('<div class="westbank-digest-empty">Waiting for West Bank incidents...</div>');
+    this.content.addEventListener('click', (event) => {
+      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-westbank-map-lat][data-westbank-map-lon]');
+      if (!target) return;
+      event.preventDefault();
+      const lat = Number(target.dataset.westbankMapLat);
+      const lon = Number(target.dataset.westbankMapLon);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        this.onMapNavigate?.(lat, lon);
+      }
+    });
+  }
+
+  public setMapNavigateHandler(handler: (lat: number, lon: number) => void): void {
+    this.onMapNavigate = handler;
   }
 
   private renderEmpty(message: string): void {
@@ -111,12 +128,13 @@ export class WestBankDigestPanel extends Panel {
     }
 
     const sourceCount = new Set(items.map((item) => item.sourceId)).size;
-    const topPlaces = [...new Set(items.map((item) => item.placeLabel).filter(Boolean))].slice(0, 4);
+    const topPlaces = [...new Set(items.map((item) => item.placeLabel).filter((place): place is string => !!place))].slice(0, 4);
     const health = digest.sourceHealth
       .filter((entry) => entry.status !== 'ok' || entry.staleMinutes == null || entry.staleMinutes > 30)
       .slice(0, 6);
 
     const sectionHtml = sections.map((section) => {
+      const lowConfidence = isLowConfidenceSection(section.key);
       const cards = section.items.map((item) => {
         const meta = [
           item.sourceName,
@@ -124,9 +142,13 @@ export class WestBankDigestPanel extends Panel {
           item.sourceCount ? `${item.sourceCount} source${item.sourceCount === 1 ? '' : 's'}` : null,
           item.placeLabel ?? null,
         ].filter((value): value is string => !!value);
+        const mapTarget = getWestBankDigestMapTarget(item);
+        const mapAction = mapTarget
+          ? `<button type="button" class="westbank-digest-map-link" data-westbank-map-lat="${mapTarget.lat}" data-westbank-map-lon="${mapTarget.lon}">Show on map</button>`
+          : '';
 
         return `
-          <article class="westbank-digest-card westbank-digest-card--sectioned">
+          <article class="westbank-digest-card westbank-digest-card--sectioned${lowConfidence ? ' westbank-digest-card--low-confidence' : ''}">
             <div class="westbank-digest-card-body">
               <div class="westbank-digest-card-head">
                 ${renderThreatBadge(item.threatLevel ?? 'info')}
@@ -138,17 +160,19 @@ export class WestBankDigestPanel extends Panel {
               <div class="westbank-digest-meta">
                 ${meta.map((value) => `<span class="westbank-digest-meta-item">${escapeHtml(value)}</span>`).join('')}
               </div>
+              ${mapAction ? `<div class="westbank-digest-actions">${mapAction}</div>` : ''}
             </div>
           </article>
         `;
       }).join('');
 
       return `
-        <section class="westbank-digest-section">
+        <section class="westbank-digest-section${lowConfidence ? ' westbank-digest-section--low-confidence' : ''}">
           <div class="westbank-digest-section-head">
             <h4 class="westbank-digest-section-title">${escapeHtml(section.label)}</h4>
             <span class="westbank-digest-chip">${section.items.length}</span>
           </div>
+          ${lowConfidence ? '<p class="westbank-digest-section-note">Single-source or unresolved reporting. Treat as provisional until corroborated.</p>' : ''}
           <div class="westbank-digest-section-list">${cards}</div>
         </section>
       `;

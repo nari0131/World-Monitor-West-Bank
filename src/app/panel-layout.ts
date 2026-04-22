@@ -1197,7 +1197,10 @@ export class PanelLayoutManager implements AppModule {
     this.createPanel('hormuz-tracker', () => new HormuzPanel());
     this.createPanel('etf-flows', () => new ETFFlowsPanel());
     this.createPanel('stablecoins', () => new StablecoinPanel());
-    this.createPanel('westbank-digest', () => new WestBankDigestPanel());
+    const westBankDigestPanel = this.createPanel('westbank-digest', () => new WestBankDigestPanel());
+    westBankDigestPanel?.setMapNavigateHandler((lat, lon) => {
+      this.ctx.map?.setCenter(lat, lon, 9);
+    });
 
     if (this.ctx.isDesktopApp) {
       const runtimeConfigPanel = new RuntimeConfigPanel({ mode: 'alert' });

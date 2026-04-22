@@ -23228,11 +23228,25 @@ body.map-width-resizing {
   gap: 10px;
 }
 
+.westbank-digest-section--low-confidence {
+  padding: 12px;
+  border: 1px solid rgba(250, 204, 21, 0.22);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.08), rgba(250, 204, 21, 0.03));
+}
+
 .westbank-digest-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.westbank-digest-section-note {
+  margin: -2px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #fcd34d;
 }
 
 .westbank-digest-section-title {
@@ -23295,6 +23309,11 @@ body.map-width-resizing {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.westbank-digest-card--low-confidence {
+  border-color: rgba(250, 204, 21, 0.18);
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.08), rgba(255, 255, 255, 0.01));
+}
+
 .westbank-digest-card-index {
   display: inline-flex;
   align-items: center;
@@ -23337,6 +23356,29 @@ body.map-width-resizing {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.westbank-digest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.westbank-digest-map-link {
+  appearance: none;
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+}
+
+.westbank-digest-map-link:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(147, 197, 253, 0.45);
 }
 
 .westbank-digest-meta-item {
