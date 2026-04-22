@@ -65,6 +65,24 @@ export {
 } from './feeds';
 
 export {
+  WESTBANK_SOURCES,
+  WESTBANK_SOURCE_BY_ID,
+  WESTBANK_LOCAL_SOURCE_NAMES,
+  getWestBankSourceById,
+  getWestBankSourceByName,
+} from './westbank-sources';
+
+export {
+  WESTBANK_PLACES,
+  WESTBANK_PLACE_BY_ID,
+  WESTBANK_WATCHLIST,
+  findWestBankPlaceMatches,
+  findWestBankPlacesInText,
+  getWestBankPlaceById,
+  getWestBankPlaceByLabel,
+} from './westbank-places';
+
+export {
   INTEL_HOTSPOTS,
   CONFLICT_ZONES,
 

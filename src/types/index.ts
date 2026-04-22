@@ -1500,3 +1500,5 @@ export interface CountryBriefSignals {
   sanctionsDesignations: number;
   sanctionsNewDesignations: number;
 }
+
+export * from './westbank';

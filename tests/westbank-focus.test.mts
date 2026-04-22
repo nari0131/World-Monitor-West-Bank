@@ -49,7 +49,7 @@ describe('westbank-focus helpers', () => {
 
     assert.ok(isWestBankRelevant(item));
     assert.ok(scoreWestBankRelevance(item) >= 8);
-    assert.deepStrictEqual(extractWestBankPlaces(item), ['Jenin']);
+    assert.deepStrictEqual(extractWestBankPlaces(item), ['Jenin Camp']);
   });
 
   it('keeps unrelated Gaza-only headlines out of the digest', () => {
@@ -156,6 +156,6 @@ describe('westbank-focus helpers', () => {
       selected.map(item => item.primaryLink),
       ['https://example.com/jenin-cluster', 'https://example.com/bethlehem-cluster'],
     );
-    assert.deepStrictEqual(extractWestBankPlacesFromCluster(jeninCluster), ['Jenin']);
+    assert.deepStrictEqual(extractWestBankPlacesFromCluster(jeninCluster), ['Jenin Camp']);
   });
 });

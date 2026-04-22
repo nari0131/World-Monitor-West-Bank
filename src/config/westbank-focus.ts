@@ -1,51 +1,17 @@
-import type { ClusteredEvent, NewsItem, ThreatLevel } from '@/types';
+import type { ClusteredEvent, NewsItem, ThreatLevel, WestBankPlaceDefinition } from '@/types';
+import { findWestBankPlacesInText, WESTBANK_WATCHLIST } from './westbank-places.ts';
+import { WESTBANK_LOCAL_SOURCE_NAMES } from './westbank-sources.ts';
 
 type FocusCandidate = Pick<NewsItem, 'title' | 'source' | 'locationName' | 'importanceScore' | 'link' | 'pubDate'>;
 type ThreatClusterCandidate = Pick<ClusteredEvent, 'primaryTitle' | 'primarySource' | 'primaryLink' | 'sourceCount' | 'lastUpdated' | 'threat' | 'lat' | 'lon' | 'allItems'>;
+
+export { WESTBANK_WATCHLIST };
 
 export const WESTBANK_DEFAULT_VIEW = {
   lat: 31.95,
   lon: 35.2,
   zoom: 7,
 } as const;
-
-export const WESTBANK_WATCHLIST = [
-  'Jenin',
-  'Nablus',
-  'Ramallah',
-  'Hebron',
-  'Tulkarm',
-  'Tubas',
-  'Qalqilya',
-  'Bethlehem',
-  'Jericho',
-  'Salfit',
-  'East Jerusalem',
-] as const;
-
-export const WESTBANK_LOCAL_SOURCES = new Set([
-  'WAFA English',
-  'Maan News',
-  '972 Magazine',
-  'Jerusalem Post WB',
-  'Times of Israel WB',
-  'Palestine Chronicle',
-]);
-
-const PLACE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'Jenin', pattern: /\bjenin\b/i },
-  { label: 'Nablus', pattern: /\bnablus\b/i },
-  { label: 'Ramallah', pattern: /\bramallah\b/i },
-  { label: 'Hebron', pattern: /\bhebron\b/i },
-  { label: 'Tulkarm', pattern: /\btulkarm\b/i },
-  { label: 'Tubas', pattern: /\btubas\b/i },
-  { label: 'Qalqilya', pattern: /\bqalqilya\b/i },
-  { label: 'Bethlehem', pattern: /\bbethlehem\b/i },
-  { label: 'Jericho', pattern: /\bjericho\b/i },
-  { label: 'Salfit', pattern: /\bsalfit\b/i },
-  { label: 'East Jerusalem', pattern: /\beast jerusalem\b/i },
-  { label: 'Masafer Yatta', pattern: /\bmasafer yatta\b/i },
-];
 
 const HIGH_PRIORITY_PATTERNS = [
   /\bwest bank\b/i,
@@ -91,24 +57,38 @@ function textFor(item: Pick<FocusCandidate, 'title' | 'locationName'>): string {
   return `${item.title ?? ''} ${item.locationName ?? ''}`.trim().toLowerCase();
 }
 
-function extractPlacesFromText(text: string): string[] {
-  return PLACE_PATTERNS.filter(({ pattern }) => pattern.test(text)).map(({ label }) => label);
-}
-
 function countPatternMatches(text: string, patterns: RegExp[]): number {
   return patterns.reduce((count, pattern) => count + (pattern.test(text) ? 1 : 0), 0);
 }
 
+function compressPlaceLabels(places: WestBankPlaceDefinition[]): string[] {
+  return places
+    .filter((place, _index, allPlaces) => {
+      if (place.kind === 'camp' || place.kind === 'checkpoint') return true;
+      return !allPlaces.some((candidate) =>
+        candidate.id !== place.id &&
+        (candidate.kind === 'camp' || candidate.kind === 'checkpoint') &&
+        candidate.label.toLowerCase().includes(place.label.toLowerCase()),
+      );
+    })
+    .map((place) => place.label);
+}
+
 export function extractWestBankPlaces(item: Pick<FocusCandidate, 'title' | 'locationName'>): string[] {
-  return extractPlacesFromText(textFor(item));
+  return compressPlaceLabels(findWestBankPlacesInText(textFor(item)));
 }
 
 export function extractWestBankPlacesFromCluster(cluster: Pick<ThreatClusterCandidate, 'primaryTitle' | 'allItems'>): string[] {
-  const places = new Set<string>(extractPlacesFromText((cluster.primaryTitle ?? '').toLowerCase()));
-  cluster.allItems.forEach((item) => {
-    extractWestBankPlaces(item).forEach((place) => places.add(place));
+  const placeMap = new Map<string, WestBankPlaceDefinition>();
+  findWestBankPlacesInText(cluster.primaryTitle ?? '').forEach((place) => {
+    placeMap.set(place.id, place);
   });
-  return [...places];
+  cluster.allItems.forEach((item) => {
+    findWestBankPlacesInText(textFor(item)).forEach((place) => {
+      placeMap.set(place.id, place);
+    });
+  });
+  return compressPlaceLabels([...placeMap.values()]);
 }
 
 export function scoreWestBankRelevance(item: FocusCandidate): number {
@@ -119,7 +99,7 @@ export function scoreWestBankRelevance(item: FocusCandidate): number {
 
   let score = 0;
 
-  if (WESTBANK_LOCAL_SOURCES.has(item.source)) score += 2;
+  if (WESTBANK_LOCAL_SOURCE_NAMES.has(item.source)) score += 2;
   if (/\bwest bank\b/i.test(fullText)) score += 5;
 
   score += placesInTitle * 3;
