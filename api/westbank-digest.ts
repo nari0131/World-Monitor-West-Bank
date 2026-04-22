@@ -1,3 +1,12 @@
+import type {
+  ClassifyEventResponse,
+  ServerContext as IntelligenceServerContext,
+} from '../src/generated/server/worldmonitor/intelligence/v1/service_server.ts';
+import type {
+  ServerContext as NewsServerContext,
+  SummarizeArticleResponse,
+} from '../src/generated/server/worldmonitor/news/v1/service_server.ts';
+
 export const config = { runtime: 'nodejs' };
 
 type VerificationClass = 'official' | 'corroborated' | 'single-source' | 'unresolved';
@@ -147,6 +156,21 @@ type WestBankCluster = {
   publishedAtMs: number;
   representative: NormalizedWestBankItem;
   items: NormalizedWestBankItem[];
+};
+
+type WestBankAiClassification = {
+  threatLevel?: WestBankThreatLevel;
+  category?: WestBankEventCategory;
+};
+
+type AiProviderName = 'ollama' | 'groq' | 'openrouter' | 'generic';
+
+type WestBankDigestWithAiOptions = {
+  now?: number;
+  lang?: string;
+  request?: NodeRequest;
+  classifyItem?: (item: NormalizedWestBankItem) => Promise<WestBankAiClassification | null | undefined>;
+  summarizeCluster?: (cluster: WestBankCluster, lang: string) => Promise<string | null | undefined>;
 };
 
 const WESTBANK_SOURCES: WestBankSourceDefinition[] = [
@@ -355,9 +379,14 @@ const WESTBANK_PLACES: WestBankPlaceDefinition[] = [
 
 const ITEM_LIMIT_PER_FEED = 5;
 const FEED_TIMEOUT_MS = 8_000;
+const AI_CLASSIFY_LIMIT = 12;
+const AI_SUMMARY_LIMIT = 6;
+const AI_SUMMARY_HEADLINE_LIMIT = 5;
+const AI_CONCURRENCY = 3;
 const RSS_ACCEPT = 'application/rss+xml, application/xml, text/xml, */*';
 const CHROME_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36';
+const AI_PROVIDER_CHAIN: AiProviderName[] = ['ollama', 'groq', 'openrouter', 'generic'];
 
 const WESTBANK_FEED_QUERIES = [
   {
@@ -935,6 +964,248 @@ export function buildWestBankDigestFromSeed(
   return response;
 }
 
+function toRequestHeaders(headers: NodeRequest['headers']): Headers {
+  const normalized = new Headers();
+
+  for (const [name, rawValue] of Object.entries(headers)) {
+    if (Array.isArray(rawValue)) {
+      const first = rawValue.find((value) => typeof value === 'string' && value.trim());
+      if (first) normalized.set(name, first);
+      continue;
+    }
+
+    if (typeof rawValue === 'string' && rawValue.trim()) {
+      normalized.set(name, rawValue);
+    }
+  }
+
+  return normalized;
+}
+
+function createServerContext(req: NodeRequest): IntelligenceServerContext & NewsServerContext {
+  const request = new Request(
+    new URL(req.url ?? '/api/westbank-digest', getRequestOrigin(req)).toString(),
+    {
+      method: req.method ?? 'GET',
+      headers: toRequestHeaders(req.headers),
+    },
+  );
+
+  return {
+    request,
+    pathParams: {},
+    headers: Object.fromEntries(request.headers.entries()),
+  };
+}
+
+function normalizeAiThreatLevel(level: string | undefined): WestBankThreatLevel | undefined {
+  switch (level?.trim().toLowerCase()) {
+    case 'critical':
+    case 'high':
+    case 'medium':
+    case 'low':
+    case 'info':
+      return level.trim().toLowerCase() as WestBankThreatLevel;
+    default:
+      return undefined;
+  }
+}
+
+function applyAiClassification(
+  item: NormalizedWestBankItem,
+  classification: WestBankAiClassification | null | undefined,
+): void {
+  if (!classification) return;
+
+  if (classification.threatLevel) item.threatLevel = classification.threatLevel;
+  if (classification.category) item.category = classification.category;
+  item.priorityScore = scoreWestBankItemPriority(item);
+}
+
+async function resolveAvailableAiProvider(): Promise<AiProviderName | null> {
+  const [{ getProviderCredentials }, { isProviderAvailable }] = await Promise.all([
+    import('../server/_shared/llm.ts'),
+    import('../server/_shared/llm-health.ts'),
+  ]);
+
+  for (const provider of AI_PROVIDER_CHAIN) {
+    const credentials = getProviderCredentials(provider);
+    if (!credentials) continue;
+    if (await isProviderAvailable(credentials.apiUrl)) return provider;
+  }
+
+  return null;
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  const queue = [...items];
+  const workers = Array.from(
+    { length: Math.min(concurrency, queue.length) },
+    async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (!item) return;
+        await task(item);
+      }
+    },
+  );
+
+  await Promise.all(workers);
+}
+
+async function classifyWestBankItemWithAi(
+  ctx: IntelligenceServerContext,
+  item: NormalizedWestBankItem,
+): Promise<WestBankAiClassification | null> {
+  const { classifyEvent: classifyEventRpc } = await import('../server/worldmonitor/intelligence/v1/classify-event.ts');
+  const response = await classifyEventRpc(ctx, {
+    title: item.title,
+    description: item.placeLabel ?? '',
+    source: item.sourceName,
+    country: 'PS',
+  });
+
+  return toWestBankAiClassification(item, response);
+}
+
+function toWestBankAiClassification(
+  item: Pick<NormalizedWestBankItem, 'title' | 'sourceType'>,
+  response: ClassifyEventResponse,
+): WestBankAiClassification | null {
+  const classification = response.classification;
+  if (!classification) return null;
+
+  const threatLevel = normalizeAiThreatLevel(classification.subcategory);
+  const category = normalizeEventCategory(
+    item.title,
+    classification.category,
+    item.sourceType,
+  );
+
+  return { threatLevel, category };
+}
+
+async function enrichWestBankItemsWithAi(
+  items: NormalizedWestBankItem[],
+  options: WestBankDigestWithAiOptions,
+): Promise<NormalizedWestBankItem[]> {
+  const classifyItem = options.classifyItem;
+  if (!classifyItem) return items.sort(compareWestBankItems);
+
+  const candidates = items
+    .slice()
+    .sort(compareWestBankItems)
+    .slice(0, AI_CLASSIFY_LIMIT);
+
+  await runWithConcurrency(candidates, AI_CONCURRENCY, async (item) => {
+    try {
+      applyAiClassification(item, await classifyItem(item));
+    } catch {
+      item.priorityScore = scoreWestBankItemPriority(item);
+    }
+  });
+
+  return items.sort(compareWestBankItems);
+}
+
+async function summarizeWestBankClusterWithAi(
+  ctx: NewsServerContext,
+  cluster: WestBankCluster,
+  provider: AiProviderName,
+  lang: string,
+): Promise<string | undefined> {
+  const { summarizeArticle: summarizeArticleRpc } = await import('../server/worldmonitor/news/v1/summarize-article.ts');
+  const headlines = [...new Set(cluster.items.map((item) => item.title.trim()).filter(Boolean))]
+    .slice(0, AI_SUMMARY_HEADLINE_LIMIT);
+
+  if (headlines.length === 0) return undefined;
+
+  const response = await summarizeArticleRpc(ctx, {
+    provider,
+    headlines,
+    mode: 'brief',
+    geoContext: cluster.placeLabel ?? '',
+    variant: 'westbank',
+    lang,
+    systemAppend: '',
+  });
+
+  return normalizeSummaryResponse(response);
+}
+
+function normalizeSummaryResponse(response: SummarizeArticleResponse): string | undefined {
+  const summary = typeof response.summary === 'string' ? response.summary.trim() : '';
+  if (!summary || response.fallback) return undefined;
+  return summary;
+}
+
+async function enrichWestBankClustersWithAi(
+  clusters: WestBankCluster[],
+  options: WestBankDigestWithAiOptions,
+): Promise<void> {
+  const summarizeCluster = options.summarizeCluster;
+  if (!summarizeCluster) return;
+
+  const candidates = clusters
+    .slice()
+    .sort(compareWestBankClusters)
+    .slice(0, AI_SUMMARY_LIMIT);
+
+  await runWithConcurrency(candidates, AI_CONCURRENCY, async (cluster) => {
+    try {
+      const summary = await summarizeCluster(cluster, options.lang ?? 'en');
+      if (summary?.trim()) cluster.representative.excerpt = summary.trim();
+    } catch {
+      // Keep the digest usable even when AI summarization is unavailable.
+    }
+  });
+}
+
+function createAiEnrichmentOptions(
+  request: NodeRequest | undefined,
+  lang: string | undefined,
+  availableProvider: AiProviderName | null,
+): Pick<WestBankDigestWithAiOptions, 'classifyItem' | 'summarizeCluster'> {
+  if (!request || !availableProvider) {
+    return {};
+  }
+
+  const ctx = createServerContext(request);
+
+  return {
+    classifyItem: (item) => classifyWestBankItemWithAi(ctx, item),
+    summarizeCluster: (cluster, clusterLang) =>
+      summarizeWestBankClusterWithAi(ctx, cluster, availableProvider, clusterLang || lang || 'en'),
+  };
+}
+
+export async function buildWestBankDigestFromSeedWithAi(
+  seedDigest: SeedDigest,
+  options: WestBankDigestWithAiOptions = {},
+): Promise<WestBankDigestResponse> {
+  const now = options.now ?? Date.now();
+  const normalizedItems = await enrichWestBankItemsWithAi(
+    normalizeWestBankSeedDigest(seedDigest),
+    options,
+  );
+  const clusters = clusterWestBankItems(normalizedItems);
+  await enrichWestBankClustersWithAi(clusters, options);
+
+  const response = createEmptyWestBankDigestResponse(
+    seedDigest.generatedAt || new Date(now).toISOString(),
+  );
+
+  response.sections = buildWestBankSections(clusters, now);
+  response.sourceHealth = buildWestBankSourceHealth(seedDigest, normalizedItems, now);
+  response.mapEvents = buildWestBankMapEvents(clusters);
+
+  return response;
+}
+
 export function createWestBankDigestFailureResponse(error: unknown): WestBankDigestResponse {
   const response = createEmptyWestBankDigestResponse();
   response.sourceHealth = buildWestBankFailureSourceHealth(error);
@@ -1145,7 +1416,12 @@ export default async function handler(req: NodeRequest, res: NodeResponse): Prom
     const url = new URL(req.url ?? '/api/westbank-digest', getRequestOrigin(req));
     const lang = url.searchParams.get('lang') ?? 'en';
     const seedDigest = await fetchWestBankSeedDigest(req, lang);
-    const payload = buildWestBankDigestFromSeed(seedDigest);
+    const availableProvider = await resolveAvailableAiProvider();
+    const payload = await buildWestBankDigestFromSeedWithAi(seedDigest, {
+      lang,
+      request: req,
+      ...createAiEnrichmentOptions(req, lang, availableProvider),
+    });
     res.status(200).send(JSON.stringify(payload));
   } catch (error) {
     const payload = createWestBankDigestFailureResponse(error);

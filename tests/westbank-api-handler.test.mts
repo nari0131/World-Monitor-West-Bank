@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildWestBankDigestFromSeed,
+  buildWestBankDigestFromSeedWithAi,
   createWestBankDigestFailureResponse,
   getRequestOrigin,
 } from '../api/westbank-digest.ts';
@@ -70,4 +71,74 @@ test('west bank digest api helper prefers forwarded host metadata for same-origi
   });
 
   assert.equal(origin, 'https://world-monitor-west-bank.vercel.app');
+});
+
+test('west bank digest api helper applies AI classification and summaries fail-soft', async () => {
+  const now = Date.parse('2026-04-22T11:40:00.000Z');
+  const digest = await buildWestBankDigestFromSeedWithAi({
+    generatedAt: new Date(now).toISOString(),
+    categories: {
+      breaking: {
+        items: [
+          {
+            title: 'Israeli forces raid Jenin Camp overnight',
+            source: 'WAFA English',
+            link: 'https://example.com/jenin',
+            locationName: 'Jenin Camp',
+            publishedAt: now - 5 * 60_000,
+            threat: {
+              level: 'THREAT_LEVEL_HIGH',
+              category: 'conflict',
+            },
+          },
+          {
+            title: 'Checkpoint closure reported near Nablus',
+            source: 'Maan News',
+            link: 'https://example.com/nablus',
+            locationName: 'Nablus',
+            publishedAt: now - 15 * 60_000,
+            threat: {
+              level: 'THREAT_LEVEL_MEDIUM',
+              category: 'conflict',
+            },
+          },
+        ],
+      },
+    },
+    feedStatuses: {
+      'WAFA English': 'ok',
+      'Maan News': 'ok',
+    },
+  }, {
+    now,
+    lang: 'en',
+    classifyItem: async (item) => {
+      if (item.placeId === 'jenin-camp') {
+        return { threatLevel: 'critical', category: 'raid' };
+      }
+
+      throw new Error('skip non-primary item');
+    },
+    summarizeCluster: async (cluster) => {
+      if (cluster.placeId === 'jenin-camp') {
+        return 'AI summary: raid pressure remains concentrated around Jenin Camp.';
+      }
+
+      throw new Error('summary unavailable');
+    },
+  });
+
+  const nowSection = digest.sections.find((section) => section.key === 'now');
+  assert.equal(nowSection?.items[0]?.placeLabel, 'Jenin Camp');
+  assert.equal(nowSection?.items[0]?.threatLevel, 'critical');
+  assert.equal(nowSection?.items[0]?.category, 'raid');
+  assert.match(nowSection?.items[0]?.excerpt ?? '', /AI summary:/);
+
+  const mappedJenin = digest.mapEvents.find((item) => item.placeLabel === 'Jenin Camp');
+  assert.match(mappedJenin?.excerpt ?? '', /AI summary:/);
+
+  const nablusItem = digest.sections
+    .flatMap((section) => section.items)
+    .find((item) => item.placeLabel === 'Nablus');
+  assert.equal(nablusItem?.excerpt, undefined);
 });
