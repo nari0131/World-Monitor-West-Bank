@@ -407,6 +407,16 @@ const THREAT_ALPHA: Record<string, number> = {
   info: 80,
 };
 
+function getThreatRgb(level: string | undefined): [number, number, number] {
+  const resolved = level ?? 'info';
+  return THREAT_RGB[resolved] ?? THREAT_RGB.info ?? [59, 130, 246];
+}
+
+function getThreatAlpha(level: string | undefined): number {
+  const resolved = level ?? 'info';
+  return THREAT_ALPHA[resolved] ?? THREAT_ALPHA.info ?? 80;
+}
+
 function getThreatRadiusMeters(level: string): number {
   switch (level) {
     case 'critical':
@@ -3453,12 +3463,12 @@ export class DeckGLMap {
         getPosition: (d) => [d.lon, d.lat],
         getRadius: (d) => getThreatRadiusMeters(d.threatLevel),
         getFillColor: (d) => {
-          const rgb = THREAT_RGB[d.threatLevel] || THREAT_RGB.info;
-          const baseAlpha = THREAT_ALPHA[d.threatLevel] || THREAT_ALPHA.info;
+          const rgb = getThreatRgb(d.threatLevel);
+          const baseAlpha = getThreatAlpha(d.threatLevel);
           const ts = this.parseTime(d.publishedAt);
           const age = ts == null ? 0 : Math.max(0, now - ts);
           const fade = ts == null ? 1 : Math.max(0.35, 1 - Math.min(age, fadeWindowMs) / fadeWindowMs * 0.65);
-          return [...rgb, Math.round(baseAlpha * alphaScale * fade)] as [number, number, number, number];
+          return [rgb[0], rgb[1], rgb[2], Math.round(baseAlpha * alphaScale * fade)] as [number, number, number, number];
         },
         radiusMinPixels: 5,
         radiusMaxPixels: 18,
@@ -3485,11 +3495,11 @@ export class DeckGLMap {
         stroked: true,
         filled: false,
         getLineColor: (d) => {
-          const rgb = THREAT_RGB[d.threatLevel] || THREAT_RGB.info;
+          const rgb = getThreatRgb(d.threatLevel);
           const ts = this.parseTime(d.publishedAt) || now;
           const age = now - ts;
           const fadeOut = Math.max(0, 1 - age / WESTBANK_THREAT_PULSE_WINDOW_MS);
-          return [...rgb, Math.round(180 * fadeOut * alphaScale)] as [number, number, number, number];
+          return [rgb[0], rgb[1], rgb[2], Math.round(180 * fadeOut * alphaScale)] as [number, number, number, number];
         },
         lineWidthMinPixels: 1.5,
         updateTriggers: { pulseTime: now },
