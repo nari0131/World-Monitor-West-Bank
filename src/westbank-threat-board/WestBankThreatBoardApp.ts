@@ -41,7 +41,6 @@ export class WestBankThreatBoardApp {
   private map: maplibregl.Map | null = null;
   private popup: maplibregl.Popup | null = null;
   private markers = new Map<string, maplibregl.Marker>();
-  private refreshTimer: number | null = null;
   private fetchController: AbortController | null = null;
   private items: ThreatBoardItem[] = [];
   private selectedId: string | null = null;
@@ -49,8 +48,6 @@ export class WestBankThreatBoardApp {
   private mapLoaded = false;
   private initialViewportApplied = false;
   private isRefreshing = false;
-  private lastError: string | null = null;
-  private lastSuccessfulFetchAt: string | null = null;
 
   constructor(rootId: string) {
     this.rootId = rootId;
@@ -66,7 +63,7 @@ export class WestBankThreatBoardApp {
     this.bindEvents();
 
     await this.refreshData({ initial: true });
-    this.refreshTimer = window.setInterval(() => {
+    window.setInterval(() => {
       void this.refreshData();
     }, REFRESH_INTERVAL_MS);
   }
@@ -176,7 +173,6 @@ export class WestBankThreatBoardApp {
     const controller = new AbortController();
     this.fetchController = controller;
     this.isRefreshing = true;
-    this.lastError = null;
     this.renderStatus(options.initial ? 'Loading latest digest…' : 'Refreshing digest…');
 
     try {
@@ -185,7 +181,6 @@ export class WestBankThreatBoardApp {
 
       this.digest = digest;
       this.items = flattenThreatBoardItems(digest);
-      this.lastSuccessfulFetchAt = digest.generatedAt;
 
       const selectedStillExists = this.selectedId && this.items.some((item) => item.id === this.selectedId);
       if (!selectedStillExists) {
@@ -207,7 +202,6 @@ export class WestBankThreatBoardApp {
       if (controller.signal.aborted) return;
 
       const message = error instanceof Error ? error.message : 'Unknown digest failure';
-      this.lastError = message;
       this.renderError(message);
       this.renderStatus(this.digest ? 'Showing last successful digest' : 'Digest unavailable');
       if (!this.digest) this.renderEmptyState();
@@ -558,6 +552,7 @@ export class WestBankThreatBoardApp {
 
     if (mappedItems.length === 1) {
       const item = mappedItems[0];
+      if (!item) return;
       this.map.flyTo({
         center: [item.lon!, item.lat!],
         zoom: 10.6,
@@ -621,5 +616,5 @@ function prettyCategory(category: ThreatBoardItem['category']): string {
 }
 
 function formatHealthCode(code: WestBankSourceHealth['code']): string {
-  return code.replaceAll('_', ' ');
+  return code.split('_').join(' ');
 }
