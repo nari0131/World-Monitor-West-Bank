@@ -932,17 +932,31 @@ function setCorsHeaders(res: NodeResponse): void {
   res.setHeader('Content-Type', 'application/json');
 }
 
+function getOperatorApiKey(): string {
+  const directKey = process.env.WORLDMONITOR_API_KEY?.trim();
+  if (directKey) return directKey;
+
+  const validKey = (process.env.WORLDMONITOR_VALID_KEYS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .find(Boolean);
+
+  return validKey ?? '';
+}
+
 async function fetchWestBankSeedDigest(req: NodeRequest, lang: string): Promise<SeedDigest> {
   const origin = getRequestOrigin(req);
   const url = new URL('/api/news/v1/list-feed-digest', origin);
   url.searchParams.set('variant', 'westbank');
   url.searchParams.set('lang', lang);
+  const operatorKey = getOperatorApiKey();
 
   const response = await fetch(url.toString(), {
     headers: {
       Accept: 'application/json',
       Origin: origin,
       Referer: `${origin}/`,
+      ...(operatorKey ? { 'X-WorldMonitor-Key': operatorKey } : {}),
     },
     cache: 'no-store',
   });
