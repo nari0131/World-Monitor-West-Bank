@@ -1,9 +1,7 @@
 import type {
   ClassifyEventResponse,
-  ServerContext as IntelligenceServerContext,
 } from '../src/generated/server/worldmonitor/intelligence/v1/service_server.ts';
 import type {
-  ServerContext as NewsServerContext,
   SummarizeArticleResponse,
 } from '../src/generated/server/worldmonitor/news/v1/service_server.ts';
 
@@ -964,38 +962,36 @@ export function buildWestBankDigestFromSeed(
   return response;
 }
 
-function toRequestHeaders(headers: NodeRequest['headers']): Headers {
-  const normalized = new Headers();
-
-  for (const [name, rawValue] of Object.entries(headers)) {
-    if (Array.isArray(rawValue)) {
-      const first = rawValue.find((value) => typeof value === 'string' && value.trim());
-      if (first) normalized.set(name, first);
-      continue;
-    }
-
-    if (typeof rawValue === 'string' && rawValue.trim()) {
-      normalized.set(name, rawValue);
-    }
-  }
-
-  return normalized;
-}
-
-function createServerContext(req: NodeRequest): IntelligenceServerContext & NewsServerContext {
-  const request = new Request(
-    new URL(req.url ?? '/api/westbank-digest', getRequestOrigin(req)).toString(),
-    {
-      method: req.method ?? 'GET',
-      headers: toRequestHeaders(req.headers),
-    },
-  );
+function createInternalRpcHeaders(req: NodeRequest): Record<string, string> {
+  const origin = getRequestOrigin(req);
+  const operatorKey = getOperatorApiKey();
 
   return {
-    request,
-    pathParams: {},
-    headers: Object.fromEntries(request.headers.entries()),
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Origin: origin,
+    Referer: `${origin}/`,
+    ...(operatorKey ? { 'X-WorldMonitor-Key': operatorKey } : {}),
   };
+}
+
+async function postInternalRpc<TRequest, TResponse>(
+  req: NodeRequest,
+  path: string,
+  body: TRequest,
+): Promise<TResponse> {
+  const response = await fetch(new URL(path, getRequestOrigin(req)).toString(), {
+    method: 'POST',
+    headers: createInternalRpcHeaders(req),
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`${path} HTTP ${response.status}`);
+  }
+
+  return await response.json() as TResponse;
 }
 
 function normalizeAiThreatLevel(level: string | undefined): WestBankThreatLevel | undefined {
@@ -1022,9 +1018,12 @@ function applyAiClassification(
   item.priorityScore = scoreWestBankItemPriority(item);
 }
 
-async function resolveAvailableAiProvider(): Promise<AiProviderName | null> {
-  const { resolveAvailableWestBankAiProvider } = await import('../src/services/intelligence/westbank-ai-runtime');
-  return resolveAvailableWestBankAiProvider(AI_PROVIDER_CHAIN);
+function resolveAvailableAiProvider(): AiProviderName | null {
+  if (process.env.OLLAMA_API_URL) return 'ollama';
+  if (process.env.GROQ_API_KEY) return 'groq';
+  if (process.env.OPENROUTER_API_KEY) return 'openrouter';
+  if (process.env.LLM_API_URL && process.env.LLM_API_KEY) return 'generic';
+  return null;
 }
 
 async function runWithConcurrency<T>(
@@ -1048,11 +1047,18 @@ async function runWithConcurrency<T>(
 }
 
 async function classifyWestBankItemWithAi(
-  ctx: IntelligenceServerContext,
+  req: NodeRequest,
   item: NormalizedWestBankItem,
 ): Promise<WestBankAiClassification | null> {
-  const { classifyWestBankEventWithAi } = await import('../src/services/intelligence/westbank-ai-runtime');
-  const response = await classifyWestBankEventWithAi(ctx, {
+  const response = await postInternalRpc<
+    {
+      title: string;
+      description: string;
+      source: string;
+      country: string;
+    },
+    ClassifyEventResponse
+  >(req, '/api/intelligence/v1/classify-event', {
     title: item.title,
     description: item.placeLabel ?? '',
     source: item.sourceName,
@@ -1103,18 +1109,28 @@ async function enrichWestBankItemsWithAi(
 }
 
 async function summarizeWestBankClusterWithAi(
-  ctx: NewsServerContext,
+  req: NodeRequest,
   cluster: WestBankCluster,
   provider: AiProviderName,
   lang: string,
 ): Promise<string | undefined> {
-  const { summarizeWestBankHeadlinesWithAi } = await import('../src/services/intelligence/westbank-ai-runtime');
   const headlines = [...new Set(cluster.items.map((item) => item.title.trim()).filter(Boolean))]
     .slice(0, AI_SUMMARY_HEADLINE_LIMIT);
 
   if (headlines.length === 0) return undefined;
 
-  const response = await summarizeWestBankHeadlinesWithAi(ctx, {
+  const response = await postInternalRpc<
+    {
+      provider: AiProviderName;
+      headlines: string[];
+      mode: string;
+      geoContext: string;
+      variant: string;
+      lang: string;
+      systemAppend: string;
+    },
+    SummarizeArticleResponse
+  >(req, '/api/news/v1/summarize-article', {
     provider,
     headlines,
     mode: 'brief',
@@ -1164,12 +1180,10 @@ function createAiEnrichmentOptions(
     return {};
   }
 
-  const ctx = createServerContext(request);
-
   return {
-    classifyItem: (item) => classifyWestBankItemWithAi(ctx, item),
+    classifyItem: (item) => classifyWestBankItemWithAi(request, item),
     summarizeCluster: (cluster, clusterLang) =>
-      summarizeWestBankClusterWithAi(ctx, cluster, availableProvider, clusterLang || lang || 'en'),
+      summarizeWestBankClusterWithAi(request, cluster, availableProvider, clusterLang || lang || 'en'),
   };
 }
 
@@ -1406,7 +1420,7 @@ export default async function handler(req: NodeRequest, res: NodeResponse): Prom
     const url = new URL(req.url ?? '/api/westbank-digest', getRequestOrigin(req));
     const lang = url.searchParams.get('lang') ?? 'en';
     const seedDigest = await fetchWestBankSeedDigest(req, lang);
-    const availableProvider = await resolveAvailableAiProvider();
+    const availableProvider = resolveAvailableAiProvider();
     const payload = await buildWestBankDigestFromSeedWithAi(seedDigest, {
       lang,
       request: req,
