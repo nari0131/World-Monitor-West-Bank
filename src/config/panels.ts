@@ -1,5 +1,12 @@
 import type { PanelConfig, MapLayers, DataSourceId } from '@/types';
-import { SITE_VARIANT } from './variant';
+import { SITE_VARIANT } from './variant.ts';
+import {
+  DEFAULT_MAP_LAYERS as WESTBANK_MAP_LAYERS,
+  DEFAULT_PANELS as WESTBANK_PANELS,
+  MOBILE_DEFAULT_MAP_LAYERS as WESTBANK_MOBILE_MAP_LAYERS,
+  WESTBANK_PANEL_KEYS,
+  WESTBANK_PANEL_NAMES,
+} from './variants/westbank.ts';
 // boundary-ignore: isDesktopRuntime is a pure env probe with no service dependencies
 import { isDesktopRuntime } from '@/services/runtime';
 // boundary-ignore: getSecretState is a pure env/keychain probe with no service dependencies
@@ -901,74 +908,6 @@ const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
 };
 
 // ============================================
-// WEST BANK VARIANT (Israel + OPT)
-// ============================================
-const WESTBANK_PANELS: Record<string, PanelConfig> = {
-  map: { name: 'West Bank Threat Map', enabled: true, priority: 1 },
-  'westbank-digest': { name: 'Incident & News Summary', enabled: true, priority: 1 },
-};
-
-const WESTBANK_MAP_LAYERS: MapLayers = {
-  iranAttacks: false,
-  gpsJamming: false,
-  satellites: false,
-  conflicts: false,
-  bases: false,
-  cables: false,
-  pipelines: false,
-  hotspots: false,
-  ais: false,
-  nuclear: false,
-  irradiators: false,
-  radiationWatch: false,
-  sanctions: false,
-  weather: false,
-  economic: false,
-  waterways: false,
-  outages: false,
-  cyberThreats: false,
-  datacenters: false,
-  protests: false,
-  flights: false,
-  military: false,
-  natural: false,
-  spaceports: false,
-  minerals: false,
-  fires: false,
-  ucdpEvents: false,
-  displacement: false,
-  climate: false,
-  startupHubs: false,
-  cloudRegions: false,
-  accelerators: false,
-  techHQs: false,
-  techEvents: false,
-  stockExchanges: false,
-  financialCenters: false,
-  centralBanks: false,
-  commodityHubs: false,
-  gulfInvestments: false,
-  positiveEvents: false,
-  kindness: false,
-  happiness: false,
-  speciesRecovery: false,
-  renewableInstallations: false,
-  tradeRoutes: false,
-  ciiChoropleth: false,
-  resilienceScore: false,
-  dayNight: false,
-  miningSites: false,
-  processingPlants: false,
-  commodityPorts: false,
-  webcams: false,
-  diseaseOutbreaks: false,
-};
-
-const WESTBANK_MOBILE_MAP_LAYERS: MapLayers = {
-  ...WESTBANK_MAP_LAYERS,
-};
-
-// ============================================
 // UNIFIED PANEL REGISTRY
 // ============================================
 
@@ -989,11 +928,11 @@ export const VARIANT_DEFAULTS: Record<string, string[]> = {
   finance:   Object.keys(FINANCE_PANELS),
   commodity: Object.keys(COMMODITY_PANELS),
   happy:     Object.keys(HAPPY_PANELS),
-  westbank:  Object.keys(WESTBANK_PANELS),
+  westbank:  [...WESTBANK_PANEL_KEYS],
 };
 
 export const STRICT_VARIANT_PANEL_SCOPE: Partial<Record<string, readonly string[]>> = {
-  westbank: ['map', 'westbank-digest'],
+  westbank: WESTBANK_PANEL_KEYS,
 };
 
 export function getStrictVariantPanelScope(variant: string): Set<string> | null {
@@ -1025,8 +964,8 @@ export const VARIANT_PANEL_OVERRIDES: Partial<Record<string, Partial<Record<stri
     map:         { name: 'World Map' },
   },
   westbank: {
-    map:              { name: 'West Bank Threat Map' },
-    'westbank-digest': { name: 'Incident & News Summary' },
+    map:              { name: WESTBANK_PANEL_NAMES.map },
+    'westbank-digest': { name: WESTBANK_PANEL_NAMES.digest },
   },
 };
 

@@ -91,6 +91,7 @@ import {
   STORAGE_KEYS,
   SITE_VARIANT,
   ALL_PANELS,
+  getEffectivePanelConfig,
   VARIANT_DEFAULTS,
 } from '@/config';
 import { BETA_MODE } from '@/config/beta';
@@ -555,7 +556,7 @@ export class PanelLayoutManager implements AppModule {
         <div class="map-section" id="mapSection">
           <div class="panel-header">
             <div class="panel-header-left">
-              <span class="panel-title">${SITE_VARIANT === 'tech' ? t('panels.techMap') : SITE_VARIANT === 'happy' ? 'Good News Map' : SITE_VARIANT === 'westbank' ? 'West Bank Threat Map' : t('panels.map')}</span>
+              <span class="panel-title">${SITE_VARIANT === 'tech' ? t('panels.techMap') : SITE_VARIANT === 'happy' ? 'Good News Map' : SITE_VARIANT === 'westbank' ? escapeHtml(getEffectivePanelConfig('map', SITE_VARIANT).name) : t('panels.map')}</span>
             </div>
             <span class="header-clock" id="headerClock" translate="no"></span>
             <div class="map-header-actions">

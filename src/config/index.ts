@@ -13,6 +13,11 @@ export {
   MONITOR_COLORS,
   STORAGE_KEYS,
 } from './variants/base';
+export {
+  VARIANT_CONFIG as WESTBANK_VARIANT_CONFIG,
+  WESTBANK_PANEL_NAMES,
+  WESTBANK_SOURCE_REGION_LABEL_KEY,
+} from './variants/westbank.ts';
 
 // Market data (shared)
 export { SECTORS, COMMODITIES, MARKET_SYMBOLS, CRYPTO_MAP } from './markets';

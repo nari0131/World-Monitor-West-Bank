@@ -1,5 +1,6 @@
 import type { Feed } from '@/types';
-import { SITE_VARIANT } from './variant';
+import { SITE_VARIANT } from './variant.ts';
+import { WESTBANK_SOURCE_REGION_LABEL_KEY } from './variants/westbank.ts';
 import { rssProxyUrl } from '@/utils';
 
 const rss = rssProxyUrl;
@@ -906,38 +907,45 @@ export const FEEDS = SITE_VARIANT === 'tech'
           ? WESTBANK_FEEDS
           : FULL_FEEDS;
 
-export const SOURCE_REGION_MAP: Record<string, { labelKey: string; feedKeys: string[] }> = {
-  // Full (geopolitical) variant regions
-  worldwide: { labelKey: 'header.sourceRegionWorldwide', feedKeys: ['politics', 'crisis'] },
-  us: { labelKey: 'header.sourceRegionUS', feedKeys: ['us', 'gov'] },
-  europe: { labelKey: 'header.sourceRegionEurope', feedKeys: ['europe'] },
-  middleeast: { labelKey: 'header.sourceRegionMiddleEast', feedKeys: SITE_VARIANT === 'westbank' ? ['westbank'] : ['middleeast'] },
-  africa: { labelKey: 'header.sourceRegionAfrica', feedKeys: ['africa'] },
-  latam: { labelKey: 'header.sourceRegionLatAm', feedKeys: ['latam'] },
-  asia: { labelKey: 'header.sourceRegionAsiaPacific', feedKeys: ['asia'] },
-  topical: { labelKey: 'header.sourceRegionTopical', feedKeys: ['energy', 'tech', 'ai', 'finance', 'layoffs', 'thinktanks'] },
-  intel: { labelKey: 'header.sourceRegionIntel', feedKeys: [] },
+export function createSourceRegionMap(variant = SITE_VARIANT): Record<string, { labelKey: string; feedKeys: string[] }> {
+  return {
+    // Full (geopolitical) variant regions
+    worldwide: { labelKey: 'header.sourceRegionWorldwide', feedKeys: ['politics', 'crisis'] },
+    us: { labelKey: 'header.sourceRegionUS', feedKeys: ['us', 'gov'] },
+    europe: { labelKey: 'header.sourceRegionEurope', feedKeys: ['europe'] },
+    middleeast: {
+      labelKey: variant === 'westbank' ? WESTBANK_SOURCE_REGION_LABEL_KEY : 'header.sourceRegionMiddleEast',
+      feedKeys: variant === 'westbank' ? ['westbank'] : ['middleeast'],
+    },
+    africa: { labelKey: 'header.sourceRegionAfrica', feedKeys: ['africa'] },
+    latam: { labelKey: 'header.sourceRegionLatAm', feedKeys: ['latam'] },
+    asia: { labelKey: 'header.sourceRegionAsiaPacific', feedKeys: ['asia'] },
+    topical: { labelKey: 'header.sourceRegionTopical', feedKeys: ['energy', 'tech', 'ai', 'finance', 'layoffs', 'thinktanks'] },
+    intel: { labelKey: 'header.sourceRegionIntel', feedKeys: [] },
 
-  // Tech variant regions
-  techNews: { labelKey: 'header.sourceRegionTechNews', feedKeys: ['tech', 'hardware'] },
-  aiMl: { labelKey: 'header.sourceRegionAiMl', feedKeys: ['ai'] },
-  startupsVc: { labelKey: 'header.sourceRegionStartupsVc', feedKeys: ['startups', 'vcblogs', 'funding', 'unicorns', 'accelerators', 'ipo'] },
-  regionalTech: { labelKey: 'header.sourceRegionRegionalTech', feedKeys: ['regionalStartups'] },
-  developer: { labelKey: 'header.sourceRegionDeveloper', feedKeys: ['github', 'cloud', 'dev', 'producthunt', 'outages'] },
-  cybersecurity: { labelKey: 'header.sourceRegionCybersecurity', feedKeys: ['security'] },
-  techPolicy: { labelKey: 'header.sourceRegionTechPolicy', feedKeys: ['policy', 'thinktanks'] },
-  techMedia: { labelKey: 'header.sourceRegionTechMedia', feedKeys: ['podcasts', 'layoffs', 'finance'] },
+    // Tech variant regions
+    techNews: { labelKey: 'header.sourceRegionTechNews', feedKeys: ['tech', 'hardware'] },
+    aiMl: { labelKey: 'header.sourceRegionAiMl', feedKeys: ['ai'] },
+    startupsVc: { labelKey: 'header.sourceRegionStartupsVc', feedKeys: ['startups', 'vcblogs', 'funding', 'unicorns', 'accelerators', 'ipo'] },
+    regionalTech: { labelKey: 'header.sourceRegionRegionalTech', feedKeys: ['regionalStartups'] },
+    developer: { labelKey: 'header.sourceRegionDeveloper', feedKeys: ['github', 'cloud', 'dev', 'producthunt', 'outages'] },
+    cybersecurity: { labelKey: 'header.sourceRegionCybersecurity', feedKeys: ['security'] },
+    techPolicy: { labelKey: 'header.sourceRegionTechPolicy', feedKeys: ['policy', 'thinktanks'] },
+    techMedia: { labelKey: 'header.sourceRegionTechMedia', feedKeys: ['podcasts', 'layoffs', 'finance'] },
 
-  // Finance variant regions
-  marketsAnalysis: { labelKey: 'header.sourceRegionMarkets', feedKeys: ['markets', 'analysis', 'ipo'] },
-  fixedIncomeFx: { labelKey: 'header.sourceRegionFixedIncomeFx', feedKeys: ['forex', 'bonds'] },
-  commoditiesRegion: { labelKey: 'header.sourceRegionCommodities', feedKeys: ['commodities'] },
-  cryptoDigital: { labelKey: 'header.sourceRegionCryptoDigital', feedKeys: ['crypto', 'fintech'] },
-  centralBanksEcon: { labelKey: 'header.sourceRegionCentralBanks', feedKeys: ['centralbanks', 'economic'] },
-  dealsCorpFin: { labelKey: 'header.sourceRegionDeals', feedKeys: ['institutional', 'derivatives'] },
-  finRegulation: { labelKey: 'header.sourceRegionFinRegulation', feedKeys: ['fin-regulation'] },
-  gulfMena: { labelKey: 'header.sourceRegionGulfMena', feedKeys: ['gccNews'] },
-};
+    // Finance variant regions
+    marketsAnalysis: { labelKey: 'header.sourceRegionMarkets', feedKeys: ['markets', 'analysis', 'ipo'] },
+    fixedIncomeFx: { labelKey: 'header.sourceRegionFixedIncomeFx', feedKeys: ['forex', 'bonds'] },
+    commoditiesRegion: { labelKey: 'header.sourceRegionCommodities', feedKeys: ['commodities'] },
+    cryptoDigital: { labelKey: 'header.sourceRegionCryptoDigital', feedKeys: ['crypto', 'fintech'] },
+    centralBanksEcon: { labelKey: 'header.sourceRegionCentralBanks', feedKeys: ['centralbanks', 'economic'] },
+    dealsCorpFin: { labelKey: 'header.sourceRegionDeals', feedKeys: ['institutional', 'derivatives'] },
+    finRegulation: { labelKey: 'header.sourceRegionFinRegulation', feedKeys: ['fin-regulation'] },
+    gulfMena: { labelKey: 'header.sourceRegionGulfMena', feedKeys: ['gccNews'] },
+  };
+}
+
+export const SOURCE_REGION_MAP = createSourceRegionMap();
 
 export const INTEL_SOURCES: Feed[] = [
   // Defense & Security (Tier 1)

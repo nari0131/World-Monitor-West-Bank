@@ -1,3 +1,5 @@
+import { WESTBANK_PANEL_NAMES } from './variants/westbank.ts';
+
 export interface VariantMeta {
   title: string;
   description: string;
@@ -129,21 +131,21 @@ export const VARIANT_META: { full: VariantMeta; [k: string]: VariantMeta } = {
   },
   westbank: {
     title: 'West Bank Monitor - Real-Time West Bank Situational Awareness',
-    description: 'A West Bank-focused World Monitor variant for local media tracking, Telegram, sirens, and structured event monitoring across Israel and the occupied Palestinian territories.',
+    description: 'A West Bank-focused World Monitor variant with an Israel + OPT threat map, West Bank digest, local media tracking, sirens, and structured event monitoring.',
     keywords: 'west bank monitor, jenin, nablus, ramallah, hebron, settlements, checkpoint incidents, local media, telegram intel, oref, gdelt, acled, osint, israel palestine dashboard',
     url: 'https://world-monitor-west-bank.vercel.app/',
     siteName: 'West Bank Monitor',
     shortName: 'WestBankMonitor',
-    subject: 'West Bank-first situational awareness and source-attributed monitoring',
+    subject: 'West Bank-first situational awareness with an Israel + OPT threat map and source-attributed digest',
     classification: 'Regional Intelligence Dashboard, OSINT Tool, News Aggregator',
     categories: ['news', 'productivity'],
     features: [
       'West Bank local media monitoring',
-      'West Bank digest',
+      WESTBANK_PANEL_NAMES.digest,
       'Telegram intelligence',
       'OREF siren tracking',
       'Structured event monitoring',
-      'Israel and OPT regional map',
+      'Israel + OPT threat map',
     ],
   },
 };

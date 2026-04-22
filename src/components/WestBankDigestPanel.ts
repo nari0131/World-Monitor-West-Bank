@@ -10,6 +10,7 @@ import type {
 } from '@/types';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { getWestBankSourceById } from '@/config/westbank-sources';
+import { WESTBANK_PANEL_NAMES } from '@/config/variants/westbank';
 import { extractWestBankPlaces, extractWestBankPlacesFromCluster, WESTBANK_WATCHLIST } from '@/config/westbank-focus';
 import { getWestBankDigestMapTarget, isLowConfidenceSection } from './westbank-digest-helpers';
 
@@ -136,7 +137,7 @@ export class WestBankDigestPanel extends Panel {
   constructor() {
     super({
       id: 'westbank-digest',
-      title: 'Incident & News Summary',
+      title: WESTBANK_PANEL_NAMES.digest,
       showCount: true,
       trackActivity: false,
     });
