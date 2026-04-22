@@ -21,8 +21,26 @@
   color: var(--wb-text);
 }
 
+:root[data-variant='westbank'] {
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+:root[data-variant='westbank'] body {
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 :root[data-variant='westbank'] #app {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: auto;
   min-height: 100vh;
+  overflow: visible;
+  display: block;
 }
 
 .wb-threat-board {
