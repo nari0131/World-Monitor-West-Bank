@@ -117,11 +117,7 @@ const VARIANT_LAYER_ORDER: Record<MapVariant, Array<keyof MapLayers>> = {
     'ais', 'economic', 'fires', 'climate',
     'resilienceScore', 'natural', 'weather', 'outages', 'sanctions', 'dayNight',
   ],
-  westbank: [
-    'hotspots', 'conflicts', 'protests', 'ucdpEvents',
-    'military', 'weather', 'outages', 'webcams',
-    'satellites', 'dayNight',
-  ],
+  westbank: [],
 };
 
 const I18N_PREFIX = 'components.deckgl.layers.';

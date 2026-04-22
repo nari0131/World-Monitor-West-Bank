@@ -115,7 +115,7 @@ import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import type { AuthSession } from '@/services/auth-state';
 import { PanelGateReason, getPanelGateReason, hasPremiumAccess } from '@/services/panel-gating';
 import type { Panel } from '@/components/Panel';
-import { selectWestBankDigestItems, WESTBANK_DEFAULT_VIEW } from '@/config/westbank-focus';
+import { selectWestBankDigestItems, selectWestBankThreatClusters, WESTBANK_DEFAULT_VIEW } from '@/config/westbank-focus';
 
 /** Panels that require premium access on web. Auth-based gating applies to these. */
 const WEB_PREMIUM_PANELS = new Set([
@@ -555,7 +555,7 @@ export class PanelLayoutManager implements AppModule {
         <div class="map-section" id="mapSection">
           <div class="panel-header">
             <div class="panel-header-left">
-              <span class="panel-title">${SITE_VARIANT === 'tech' ? t('panels.techMap') : SITE_VARIANT === 'happy' ? 'Good News Map' : SITE_VARIANT === 'westbank' ? 'Israel + West Bank Map' : t('panels.map')}</span>
+              <span class="panel-title">${SITE_VARIANT === 'tech' ? t('panels.techMap') : SITE_VARIANT === 'happy' ? 'Good News Map' : SITE_VARIANT === 'westbank' ? 'West Bank Threat Map' : t('panels.map')}</span>
             </div>
             <span class="header-clock" id="headerClock" translate="no"></span>
             <div class="map-header-actions">
@@ -1500,9 +1500,14 @@ export class PanelLayoutManager implements AppModule {
     });
 
     if (SITE_VARIANT === 'westbank') {
-      const digestItems = selectWestBankDigestItems(this.filterItemsByTimeRange(this.ctx.allNews));
       const digestPanel = this.ctx.panels['westbank-digest'] as WestBankDigestPanel | undefined;
-      digestPanel?.setItems(digestItems);
+      if (this.ctx.latestClusters.length > 0) {
+        const digestClusters = selectWestBankThreatClusters(this.filterClustersByTimeRange(this.ctx.latestClusters));
+        digestPanel?.setClusters(digestClusters);
+      } else {
+        const digestItems = selectWestBankDigestItems(this.filterItemsByTimeRange(this.ctx.allNews));
+        digestPanel?.setItems(digestItems);
+      }
     }
   }
 
@@ -1516,6 +1521,20 @@ export class PanelLayoutManager implements AppModule {
     const cutoff = Date.now() - (ranges[range] ?? Infinity);
     return items.filter((item) => {
       const ts = item.pubDate instanceof Date ? item.pubDate.getTime() : new Date(item.pubDate).getTime();
+      return Number.isFinite(ts) ? ts >= cutoff : true;
+    });
+  }
+
+  private filterClustersByTimeRange(clusters: ClusteredEvent[], range: import('@/components').TimeRange = this.ctx.currentTimeRange): ClusteredEvent[] {
+    if (range === 'all') return clusters;
+    const ranges: Record<string, number> = {
+      '1h': 60 * 60 * 1000, '6h': 6 * 60 * 60 * 1000,
+      '24h': 24 * 60 * 60 * 1000, '48h': 48 * 60 * 60 * 1000,
+      '7d': 7 * 24 * 60 * 60 * 1000, 'all': Infinity,
+    };
+    const cutoff = Date.now() - (ranges[range] ?? Infinity);
+    return clusters.filter((cluster) => {
+      const ts = cluster.lastUpdated instanceof Date ? cluster.lastUpdated.getTime() : new Date(cluster.lastUpdated).getTime();
       return Number.isFinite(ts) ? ts >= cutoff : true;
     });
   }

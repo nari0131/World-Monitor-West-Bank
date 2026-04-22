@@ -3,7 +3,7 @@
  * Loaded when the app is opened with ?settings=1 (e.g. from the main window's Settings button).
  */
 import type { PanelConfig } from '@/types';
-import { DEFAULT_PANELS, STORAGE_KEYS, ALL_PANELS, VARIANT_DEFAULTS, getEffectivePanelConfig, isPanelEntitled, FREE_MAX_PANELS } from '@/config';
+import { DEFAULT_PANELS, STORAGE_KEYS, ALL_PANELS, VARIANT_DEFAULTS, getStrictVariantPanelScope, getEffectivePanelConfig, isPanelEntitled, FREE_MAX_PANELS } from '@/config';
 import { isProUser } from '@/services/widget-store';
 import { SITE_VARIANT } from '@/config/variant';
 import { loadFromStorage, saveToStorage } from '@/utils';
@@ -32,13 +32,16 @@ export function initSettingsWindow(): void {
     STORAGE_KEYS.panels,
     DEFAULT_PANELS
   );
+  const strictPanelScope = getStrictVariantPanelScope(SITE_VARIANT);
+  const isPanelAvailableInVariant = (key: string) => !strictPanelScope || strictPanelScope.has(key);
   // Prune stale panel keys not in current registry (e.g. renamed panels)
   const validPanelKeys = new Set(Object.keys(ALL_PANELS));
   for (const key of Object.keys(panelSettings)) {
-    if (!validPanelKeys.has(key) && key !== 'runtime-config') delete panelSettings[key];
+    if ((!validPanelKeys.has(key) || !isPanelAvailableInVariant(key)) && key !== 'runtime-config') delete panelSettings[key];
   }
   const variantDefaults = new Set(VARIANT_DEFAULTS[SITE_VARIANT] ?? []);
   for (const key of Object.keys(ALL_PANELS)) {
+    if (!isPanelAvailableInVariant(key)) continue;
     if (!(key in panelSettings)) {
       panelSettings[key] = { ...getEffectivePanelConfig(key, SITE_VARIANT), enabled: variantDefaults.has(key) };
     }
@@ -48,7 +51,7 @@ export function initSettingsWindow(): void {
 
   function render(): void {
     const panelEntries = Object.entries(panelSettings).filter(
-      ([key]) => (key !== 'runtime-config' || isDesktopApp) && (!key.startsWith('cw-') || isProUser())
+      ([key]) => (key !== 'runtime-config' || isDesktopApp) && (!key.startsWith('cw-') || isProUser()) && isPanelAvailableInVariant(key)
     );
     const panelHtml = panelEntries
       .map(

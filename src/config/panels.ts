@@ -904,25 +904,19 @@ const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
 // WEST BANK VARIANT (Israel + OPT)
 // ============================================
 const WESTBANK_PANELS: Record<string, PanelConfig> = {
-  map: { name: 'Israel + West Bank Map', enabled: true, priority: 1 },
-  'westbank-digest': { name: 'West Bank Digest', enabled: true, priority: 1 },
-  westbank: { name: 'West Bank Local Media', enabled: true, priority: 1 },
-  'live-news': { name: 'Regional Live Feeds', enabled: true, priority: 1 },
-  'gdelt-intel': { name: 'Structured Events', enabled: true, priority: 1, ...(_desktop && { premium: 'enhanced' as const }) },
-  'oref-sirens': { name: 'Israel Sirens', enabled: true, priority: 2, ...(_desktop && { premium: 'locked' as const }) },
-  'telegram-intel': { name: 'Telegram Intel', enabled: true, priority: 2, ...(_desktop && { premium: 'locked' as const }) },
-  monitors: { name: 'My Monitors', enabled: true, priority: 2 },
+  map: { name: 'West Bank Threat Map', enabled: true, priority: 1 },
+  'westbank-digest': { name: 'Incident & News Summary', enabled: true, priority: 1 },
 };
 
 const WESTBANK_MAP_LAYERS: MapLayers = {
   iranAttacks: false,
   gpsJamming: false,
   satellites: false,
-  conflicts: true,
+  conflicts: false,
   bases: false,
   cables: false,
   pipelines: false,
-  hotspots: true,
+  hotspots: false,
   ais: false,
   nuclear: false,
   irradiators: false,
@@ -934,14 +928,14 @@ const WESTBANK_MAP_LAYERS: MapLayers = {
   outages: false,
   cyberThreats: false,
   datacenters: false,
-  protests: true,
+  protests: false,
   flights: false,
   military: false,
   natural: false,
   spaceports: false,
   minerals: false,
   fires: false,
-  ucdpEvents: true,
+  ucdpEvents: false,
   displacement: false,
   climate: false,
   startupHubs: false,
@@ -972,8 +966,6 @@ const WESTBANK_MAP_LAYERS: MapLayers = {
 
 const WESTBANK_MOBILE_MAP_LAYERS: MapLayers = {
   ...WESTBANK_MAP_LAYERS,
-  protests: false,
-  ucdpEvents: false,
 };
 
 // ============================================
@@ -1000,6 +992,15 @@ export const VARIANT_DEFAULTS: Record<string, string[]> = {
   westbank:  Object.keys(WESTBANK_PANELS),
 };
 
+export const STRICT_VARIANT_PANEL_SCOPE: Partial<Record<string, readonly string[]>> = {
+  westbank: ['map', 'westbank-digest'],
+};
+
+export function getStrictVariantPanelScope(variant: string): Set<string> | null {
+  const keys = STRICT_VARIANT_PANEL_SCOPE[variant];
+  return keys ? new Set(keys) : null;
+}
+
 /**
  * Variant-specific label overrides for panels shared across variants.
  * Applied at render time, not just at seed time.
@@ -1024,11 +1025,8 @@ export const VARIANT_PANEL_OVERRIDES: Partial<Record<string, Partial<Record<stri
     map:         { name: 'World Map' },
   },
   westbank: {
-    map:            { name: 'Israel + West Bank Map' },
-    'live-news':    { name: 'Regional Live Feeds' },
-    'gdelt-intel':  { name: 'Structured Events' },
-    'oref-sirens':  { name: 'Israel Sirens' },
-    'telegram-intel': { name: 'Telegram Intel' },
+    map:              { name: 'West Bank Threat Map' },
+    'westbank-digest': { name: 'Incident & News Summary' },
   },
 };
 
@@ -1136,7 +1134,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   westbankFocus: {
     labelKey: 'header.panelCatIntelligence',
-    panelKeys: ['westbank-digest', 'westbank', 'gdelt-intel', 'oref-sirens', 'telegram-intel'],
+    panelKeys: ['westbank-digest'],
     variants: ['westbank'],
   },
   regionalNews: {

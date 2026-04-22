@@ -1,6 +1,6 @@
 import '@/styles/settings-window.css';
 import { FEEDS, INTEL_SOURCES, SOURCE_REGION_MAP } from '@/config/feeds';
-import { PANEL_CATEGORY_MAP, ALL_PANELS, VARIANT_DEFAULTS, getEffectivePanelConfig, isPanelEntitled, FREE_MAX_PANELS } from '@/config/panels';
+import { PANEL_CATEGORY_MAP, ALL_PANELS, VARIANT_DEFAULTS, getStrictVariantPanelScope, getEffectivePanelConfig, isPanelEntitled, FREE_MAX_PANELS } from '@/config/panels';
 import { isProUser } from '@/services/widget-store';
 import { SITE_VARIANT } from '@/config/variant';
 import { t } from '@/services/i18n';
@@ -473,6 +473,11 @@ export class UnifiedSettings {
     });
   }
 
+  private isPanelAvailableInCurrentVariant(key: string): boolean {
+    const scope = getStrictVariantPanelScope(SITE_VARIANT);
+    return !scope || scope.has(key);
+  }
+
   private getAvailablePanelCategories(): Array<{ key: string; label: string }> {
     const settings = this.config.getPanelSettings();
     const categories: Array<{ key: string; label: string }> = [
@@ -480,7 +485,7 @@ export class UnifiedSettings {
     ];
 
     for (const [catKey, catDef] of Object.entries(PANEL_CATEGORY_MAP)) {
-      const hasEnabledPanel = catDef.panelKeys.some(pk => settings[pk]?.enabled);
+      const hasEnabledPanel = catDef.panelKeys.some(pk => this.isPanelAvailableInCurrentVariant(pk) && settings[pk]?.enabled);
       if (hasEnabledPanel) {
         categories.push({ key: catKey, label: t(catDef.labelKey) });
       }
@@ -493,7 +498,8 @@ export class UnifiedSettings {
     const panelSettings = this.draftPanelSettings;
     let entries = Object.entries(panelSettings)
       .filter(([key]) => key !== 'runtime-config' || this.config.isDesktopApp)
-      .filter(([key]) => !key.startsWith('cw-'));
+      .filter(([key]) => !key.startsWith('cw-'))
+      .filter(([key]) => this.isPanelAvailableInCurrentVariant(key));
 
     if (this.activePanelCategory !== 'all') {
       const catDef = PANEL_CATEGORY_MAP[this.activePanelCategory];
@@ -553,8 +559,14 @@ export class UnifiedSettings {
     const cloned: Record<string, PanelConfig> = Object.fromEntries(
       Object.entries(source).map(([key, panel]) => [key, { ...panel }]),
     );
+    for (const key of Object.keys(cloned)) {
+      if (!this.isPanelAvailableInCurrentVariant(key) && key !== 'runtime-config') {
+        delete cloned[key];
+      }
+    }
     const variantDefaults = new Set(VARIANT_DEFAULTS[SITE_VARIANT] ?? []);
     for (const key of Object.keys(ALL_PANELS)) {
+      if (!this.isPanelAvailableInCurrentVariant(key)) continue;
       if (!(key in cloned)) {
         cloned[key] = { ...getEffectivePanelConfig(key, SITE_VARIANT), enabled: variantDefaults.has(key) };
       }

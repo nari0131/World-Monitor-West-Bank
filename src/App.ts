@@ -10,6 +10,7 @@ import {
   SITE_VARIANT,
   ALL_PANELS,
   VARIANT_DEFAULTS,
+  getStrictVariantPanelScope,
   getEffectivePanelConfig,
   FREE_MAX_PANELS,
   FREE_MAX_SOURCES,
@@ -421,9 +422,12 @@ export class App {
 
     let mapLayers: MapLayers;
     let panelSettings: Record<string, PanelConfig>;
+    let panelSettingsMutated = false;
 
     // Panels that must survive variant switches: desktop config, user-created widgets, MCP panels.
     const isDynamicPanel = (k: string) => k === 'runtime-config' || k.startsWith('cw-') || k.startsWith('mcp-');
+    const strictPanelScope = getStrictVariantPanelScope(SITE_VARIANT);
+    const isPanelAllowedInVariant = (key: string) => !strictPanelScope || strictPanelScope.has(key) || isDynamicPanel(key);
 
     // Check if variant changed - reset all settings to variant defaults
     const storedVariant = localStorage.getItem('worldmonitor-variant');
@@ -440,15 +444,23 @@ export class App {
       );
       // Load existing panel prefs (if any), disable panels not belonging to the new variant
       panelSettings = loadFromStorage<Record<string, PanelConfig>>(STORAGE_KEYS.panels, {});
+      for (const key of Object.keys(panelSettings)) {
+        if (!isPanelAllowedInVariant(key)) {
+          delete panelSettings[key];
+          panelSettingsMutated = true;
+        }
+      }
       const newVariantKeys = new Set(VARIANT_DEFAULTS[currentVariant] ?? []);
       for (const key of Object.keys(panelSettings)) {
         if (!newVariantKeys.has(key) && !isDynamicPanel(key) && panelSettings[key]) {
           panelSettings[key] = { ...panelSettings[key]!, enabled: false };
+          panelSettingsMutated = true;
         }
       }
       for (const key of newVariantKeys) {
         if (!(key in panelSettings)) {
           panelSettings[key] = { ...getEffectivePanelConfig(key, currentVariant) };
+          panelSettingsMutated = true;
         }
       }
     } else {
@@ -462,6 +474,12 @@ export class App {
         STORAGE_KEYS.panels,
         DEFAULT_PANELS
       );
+      for (const key of Object.keys(panelSettings)) {
+        if (!isPanelAllowedInVariant(key)) {
+          delete panelSettings[key];
+          panelSettingsMutated = true;
+        }
+      }
 
       // One-time migration: preserve user preferences across panel key renames.
       const PANEL_KEY_RENAMES_MIGRATION_KEY = 'worldmonitor-panel-key-renames-v2.6.8';
@@ -506,10 +524,12 @@ export class App {
 
       // Merge in any panels from ALL_PANELS that didn't exist when settings were saved
       for (const key of Object.keys(ALL_PANELS)) {
+        if (!isPanelAllowedInVariant(key)) continue;
         if (!(key in panelSettings)) {
           const config = getEffectivePanelConfig(key, SITE_VARIANT);
           const isInVariant = (VARIANT_DEFAULTS[SITE_VARIANT] ?? []).includes(key);
           panelSettings[key] = { ...config, enabled: isInVariant && config.enabled };
+          panelSettingsMutated = true;
         }
       }
 
@@ -518,9 +538,11 @@ export class App {
       if (!localStorage.getItem(UNIFIED_MIGRATION_KEY)) {
         const variantDefaults = new Set(VARIANT_DEFAULTS[SITE_VARIANT] ?? []);
         for (const key of Object.keys(ALL_PANELS)) {
+          if (!isPanelAllowedInVariant(key)) continue;
           if (!(key in panelSettings)) {
             const config = getEffectivePanelConfig(key, SITE_VARIANT);
             panelSettings[key] = { ...config, enabled: variantDefaults.has(key) && config.enabled };
+            panelSettingsMutated = true;
           }
         }
         saveToStorage(STORAGE_KEYS.panels, panelSettings);
@@ -633,7 +655,7 @@ export class App {
 
     // Desktop key management panel must always remain accessible in Tauri.
     if (isDesktopApp) {
-      if (!panelSettings['runtime-config'] || !panelSettings['runtime-config'].enabled) {
+      if (!panelSettings['runtime-config']?.enabled) {
         panelSettings['runtime-config'] = {
           ...panelSettings['runtime-config'],
           name: panelSettings['runtime-config']?.name ?? 'Desktop Configuration',
@@ -642,6 +664,10 @@ export class App {
         };
         saveToStorage(STORAGE_KEYS.panels, panelSettings);
       }
+    }
+
+    if (panelSettingsMutated) {
+      saveToStorage(STORAGE_KEYS.panels, panelSettings);
     }
 
     const initialUrlState: ParsedMapUrlState | null = parseMapUrlState(window.location.search, mapLayers);

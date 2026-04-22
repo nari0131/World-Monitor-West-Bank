@@ -1,7 +1,7 @@
 import type { AppContext, AppModule } from '@/app/app-context';
 import { getRpcBaseUrl } from '@/services/rpc-client';
 import { enqueuePanelCall } from '@/app/pending-panel-data';
-import type { NewsItem, MapLayers, SocialUnrestEvent } from '@/types';
+import type { ClusteredEvent, NewsItem, MapLayers, SocialUnrestEvent } from '@/types';
 import type { MarketData } from '@/types';
 import type { TimeRange } from '@/components';
 import {
@@ -15,7 +15,7 @@ import {
 } from '@/config';
 import { INTEL_HOTSPOTS, CONFLICT_ZONES } from '@/config/geo';
 import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
-import { selectWestBankDigestItems } from '@/config/westbank-focus';
+import { selectWestBankDigestItems, selectWestBankThreatClusters } from '@/config/westbank-focus';
 import {
   fetchCategoryFeeds,
   getFeedFailures,
@@ -844,6 +844,15 @@ export class DataLoaderManager implements AppModule {
     });
   }
 
+  filterClustersByTimeRange(clusters: ClusteredEvent[], range: TimeRange = this.ctx.currentTimeRange): ClusteredEvent[] {
+    if (range === 'all') return clusters;
+    const cutoff = Date.now() - this.getTimeRangeWindowMs(range);
+    return clusters.filter((cluster) => {
+      const ts = cluster.lastUpdated instanceof Date ? cluster.lastUpdated.getTime() : new Date(cluster.lastUpdated).getTime();
+      return Number.isFinite(ts) ? ts >= cutoff : true;
+    });
+  }
+
   getTimeRangeLabel(range: TimeRange = this.ctx.currentTimeRange): string {
     const labels: Record<TimeRange, string> = {
       '1h': 'the last hour',
@@ -1181,6 +1190,10 @@ export class DataLoaderManager implements AppModule {
         ? await clusterNewsHybrid(this.ctx.allNews)
         : await analysisWorker.clusterNews(this.ctx.allNews);
 
+      const summaryClusters = SITE_VARIANT === 'westbank'
+        ? selectWestBankThreatClusters(this.filterClustersByTimeRange(this.ctx.latestClusters))
+        : this.ctx.latestClusters;
+
       const insightsPanel = this.ctx.panels['insights'] as InsightsPanel | undefined;
       insightsPanel?.updateInsights(this.ctx.latestClusters);
 
@@ -1189,7 +1202,7 @@ export class DataLoaderManager implements AppModule {
       (this.ctx.panels['tech-hubs'] as TechHubsPanel | undefined)
         ?.setActivities(getTopActiveHubs(this.ctx.latestClusters));
 
-      const geoLocated = this.ctx.latestClusters
+      const geoLocated = summaryClusters
         .filter((c): c is typeof c & { lat: number; lon: number } => c.lat != null && c.lon != null)
         .map(c => ({
           lat: c.lat,
@@ -1198,9 +1211,11 @@ export class DataLoaderManager implements AppModule {
           threatLevel: c.threat?.level ?? 'info',
           timestamp: c.lastUpdated,
         }));
-      if (geoLocated.length > 0) {
-        this.ctx.map?.setNewsLocations(geoLocated);
+
+      if (SITE_VARIANT === 'westbank') {
+        this.callPanel('westbank-digest', 'setClusters', summaryClusters);
       }
+      this.ctx.map?.setNewsLocations(geoLocated);
     } catch (error) {
       console.error('[App] Clustering failed, clusters unchanged:', error);
       const insightsPanel = this.ctx.panels['insights'] as InsightsPanel | undefined;

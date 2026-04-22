@@ -1,6 +1,7 @@
-import type { NewsItem } from '@/types';
+import type { ClusteredEvent, NewsItem, ThreatLevel } from '@/types';
 
 type FocusCandidate = Pick<NewsItem, 'title' | 'source' | 'locationName' | 'importanceScore' | 'link' | 'pubDate'>;
+type ThreatClusterCandidate = Pick<ClusteredEvent, 'primaryTitle' | 'primarySource' | 'primaryLink' | 'sourceCount' | 'lastUpdated' | 'threat' | 'lat' | 'lon' | 'allItems'>;
 
 export const WESTBANK_DEFAULT_VIEW = {
   lat: 31.95,
@@ -78,8 +79,20 @@ const DOWNRANK_PATTERNS = [
   /\bhouthis?\b/i,
 ];
 
+const THREAT_PRIORITY: Record<ThreatLevel, number> = {
+  critical: 5,
+  high: 4,
+  medium: 3,
+  low: 2,
+  info: 1,
+};
+
 function textFor(item: Pick<FocusCandidate, 'title' | 'locationName'>): string {
   return `${item.title ?? ''} ${item.locationName ?? ''}`.trim().toLowerCase();
+}
+
+function extractPlacesFromText(text: string): string[] {
+  return PLACE_PATTERNS.filter(({ pattern }) => pattern.test(text)).map(({ label }) => label);
 }
 
 function countPatternMatches(text: string, patterns: RegExp[]): number {
@@ -87,8 +100,15 @@ function countPatternMatches(text: string, patterns: RegExp[]): number {
 }
 
 export function extractWestBankPlaces(item: Pick<FocusCandidate, 'title' | 'locationName'>): string[] {
-  const text = textFor(item);
-  return PLACE_PATTERNS.filter(({ pattern }) => pattern.test(text)).map(({ label }) => label);
+  return extractPlacesFromText(textFor(item));
+}
+
+export function extractWestBankPlacesFromCluster(cluster: Pick<ThreatClusterCandidate, 'primaryTitle' | 'allItems'>): string[] {
+  const places = new Set<string>(extractPlacesFromText((cluster.primaryTitle ?? '').toLowerCase()));
+  cluster.allItems.forEach((item) => {
+    extractWestBankPlaces(item).forEach((place) => places.add(place));
+  });
+  return [...places];
 }
 
 export function scoreWestBankRelevance(item: FocusCandidate): number {
@@ -113,6 +133,39 @@ export function scoreWestBankRelevance(item: FocusCandidate): number {
 
 export function isWestBankRelevant(item: FocusCandidate, minScore = 3): boolean {
   return scoreWestBankRelevance(item) >= minScore;
+}
+
+export function scoreWestBankClusterRelevance(cluster: ThreatClusterCandidate): number {
+  const primaryScore = scoreWestBankRelevance({
+    title: cluster.primaryTitle,
+    source: cluster.primarySource,
+    locationName: '',
+    importanceScore: 0,
+    link: cluster.primaryLink,
+    pubDate: cluster.lastUpdated,
+  });
+  const itemScore = cluster.allItems.reduce((max, item) => Math.max(max, scoreWestBankRelevance(item)), 0);
+  const baseScore = Math.max(primaryScore, itemScore);
+  if (baseScore <= 0) return 0;
+  const severityBoost = cluster.threat ? THREAT_PRIORITY[cluster.threat.level] ?? 0 : 0;
+  const corroborationBoost = Math.max(0, Math.min(cluster.sourceCount, 4) - 1);
+  return baseScore + severityBoost + corroborationBoost;
+}
+
+export function isWestBankThreatCluster(cluster: ThreatClusterCandidate, minScore = 4): boolean {
+  return cluster.lat != null && cluster.lon != null && scoreWestBankClusterRelevance(cluster) >= minScore;
+}
+
+export function selectWestBankThreatClusters(clusters: ClusteredEvent[], limit = 12): ClusteredEvent[] {
+  return clusters
+    .filter((cluster) => isWestBankThreatCluster(cluster))
+    .sort((a, b) =>
+      (THREAT_PRIORITY[b.threat?.level ?? 'info'] ?? 0) - (THREAT_PRIORITY[a.threat?.level ?? 'info'] ?? 0) ||
+      scoreWestBankClusterRelevance(b) - scoreWestBankClusterRelevance(a) ||
+      b.sourceCount - a.sourceCount ||
+      b.lastUpdated.getTime() - a.lastUpdated.getTime()
+    )
+    .slice(0, limit);
 }
 
 export function selectWestBankDigestItems(items: NewsItem[], limit = 5): NewsItem[] {
