@@ -118,13 +118,17 @@ test('buildWestBankDigestFromSeed exposes source health and degraded integration
 
   const wafaHealth = digest.sourceHealth.find((entry) => entry.sourceName === 'WAFA English');
   assert.equal(wafaHealth?.status, 'ok');
+  assert.equal(wafaHealth?.code, 'healthy');
 
   const chronicleHealth = digest.sourceHealth.find((entry) => entry.sourceName === 'Palestine Chronicle');
   assert.equal(chronicleHealth?.status, 'degraded');
+  assert.equal(chronicleHealth?.code, 'empty_window');
 
   const jpostHealth = digest.sourceHealth.find((entry) => entry.sourceName === 'Jerusalem Post WB');
   assert.equal(jpostHealth?.status, 'down');
+  assert.equal(jpostHealth?.code, 'upstream_timeout');
 
   const telegramHealth = digest.sourceHealth.find((entry) => entry.sourceName === 'Telegram Intel');
   assert.equal(telegramHealth?.status, 'degraded');
+  assert.equal(telegramHealth?.code, 'pending_integration');
 });

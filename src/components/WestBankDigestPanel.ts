@@ -4,10 +4,12 @@ import type {
   NewsItem,
   ThreatLevel,
   WestBankDigestResponse,
+  WestBankSourceHealthCode,
   WestBankSourceHealth,
   WestBankSourceItem,
 } from '@/types';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
+import { getWestBankSourceById } from '@/config/westbank-sources';
 import { extractWestBankPlaces, extractWestBankPlacesFromCluster, WESTBANK_WATCHLIST } from '@/config/westbank-focus';
 import { getWestBankDigestMapTarget, isLowConfidenceSection } from './westbank-digest-helpers';
 
@@ -17,6 +19,18 @@ const THREAT_LABELS: Record<ThreatLevel, string> = {
   medium: 'Medium',
   low: 'Low',
   info: 'Info',
+};
+
+const HEALTH_CODE_LABELS: Record<WestBankSourceHealthCode, string> = {
+  healthy: 'Healthy',
+  pending_integration: 'Pending integration',
+  empty_window: 'No recent items',
+  no_mapped_items: 'No mapped incidents',
+  stale_cache: 'Stale cache',
+  upstream_timeout: 'Upstream timeout',
+  relay_unavailable: 'Relay unavailable',
+  proxy_missing: 'Proxy missing',
+  digest_unavailable: 'Digest unavailable',
 };
 
 type DigestTimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';
@@ -59,10 +73,61 @@ function renderVerificationBadge(verification: WestBankSourceItem['verification'
   return `<span class="westbank-digest-chip westbank-digest-chip--verification">${escapeHtml(verification)}</span>`;
 }
 
+function isOptionalSourceHealth(health: WestBankSourceHealth): boolean {
+  return getWestBankSourceById(health.sourceId)?.type !== 'rss';
+}
+
+function formatHealthDetail(health: WestBankSourceHealth): string {
+  const codeLabel = HEALTH_CODE_LABELS[health.code];
+  if (health.code === 'healthy') {
+    return health.staleMinutes != null ? `${health.staleMinutes}m fresh` : codeLabel;
+  }
+  if (health.code === 'stale_cache' && health.staleMinutes != null) {
+    return `${codeLabel} · ${health.staleMinutes}m`;
+  }
+  if (health.staleMinutes != null) {
+    return `${codeLabel} · ${health.staleMinutes}m`;
+  }
+  return codeLabel;
+}
+
 function renderHealthChip(health: WestBankSourceHealth): string {
-  const stale = health.staleMinutes != null ? ` · ${health.staleMinutes}m` : '';
   const detail = health.message ? ` title="${escapeHtml(health.message)}"` : '';
-  return `<span class="westbank-health-chip westbank-health-chip--${health.status}"${detail}>${escapeHtml(health.sourceName)}${escapeHtml(stale)}</span>`;
+  return `
+    <span class="westbank-health-chip westbank-health-chip--${health.status}"${detail}>
+      <span class="westbank-health-chip__source">${escapeHtml(health.sourceName)}</span>
+      <span class="westbank-health-chip__detail">${escapeHtml(formatHealthDetail(health))}</span>
+    </span>
+  `;
+}
+
+function renderHealthSummary(healthEntries: WestBankSourceHealth[]): string {
+  const issues = healthEntries.filter((entry) => entry.status !== 'ok');
+  if (issues.length === 0) return '';
+
+  const coreIssues = issues.filter((entry) => !isOptionalSourceHealth(entry));
+  const optionalIssues = issues.filter(isOptionalSourceHealth);
+  const downCount = issues.filter((entry) => entry.status === 'down').length;
+  const modifier = downCount > 0 || coreIssues.length > 0 ? 'down' : 'degraded';
+  const title = coreIssues.length > 0
+    ? `${coreIssues.length} core source${coreIssues.length === 1 ? '' : 's'} degraded`
+    : `${optionalIssues.length} optional source${optionalIssues.length === 1 ? '' : 's'} degraded`;
+  const note = coreIssues.length > 0
+    ? 'Coverage is reduced, but the map and incident list continue from feeds that are still responding.'
+    : 'Optional feeds are not blocking the current West Bank digest.';
+
+  return `
+    <section class="westbank-health-summary westbank-health-summary--${modifier}">
+      <div class="westbank-health-summary-title">${escapeHtml(title)}</div>
+      <p class="westbank-health-summary-note">${escapeHtml(note)}</p>
+    </section>
+  `;
+}
+
+function getVisibleHealthEntries(healthEntries: WestBankSourceHealth[]): WestBankSourceHealth[] {
+  return healthEntries
+    .filter((entry) => entry.status !== 'ok')
+    .slice(0, 8);
 }
 
 export class WestBankDigestPanel extends Panel {
@@ -92,10 +157,13 @@ export class WestBankDigestPanel extends Panel {
     this.onMapNavigate = handler;
   }
 
-  private renderEmpty(message: string): void {
+  private renderEmpty(message: string, healthEntries: WestBankSourceHealth[] = []): void {
     this.setCount(0);
+    const visibleHealth = getVisibleHealthEntries(healthEntries);
     this.setContent(`
       <div class="westbank-digest">
+        ${renderHealthSummary(healthEntries)}
+        ${visibleHealth.length > 0 ? `<div class="westbank-health-row">${visibleHealth.map(renderHealthChip).join('')}</div>` : ''}
         <div class="westbank-digest-empty">
           <p class="westbank-digest-empty-title">${escapeHtml(message)}</p>
           <div class="westbank-digest-watchlist">
@@ -123,15 +191,13 @@ export class WestBankDigestPanel extends Panel {
     this.setCount(items.length);
 
     if (items.length === 0) {
-      this.renderEmpty('No mapped West Bank incidents in the active time window.');
+      this.renderEmpty('No mapped West Bank incidents in the active time window.', digest.sourceHealth);
       return;
     }
 
     const sourceCount = new Set(items.map((item) => item.sourceId)).size;
     const topPlaces = [...new Set(items.map((item) => item.placeLabel).filter((place): place is string => !!place))].slice(0, 4);
-    const health = digest.sourceHealth
-      .filter((entry) => entry.status !== 'ok' || entry.staleMinutes == null || entry.staleMinutes > 30)
-      .slice(0, 6);
+    const health = getVisibleHealthEntries(digest.sourceHealth);
 
     const sectionHtml = sections.map((section) => {
       const lowConfidence = isLowConfidenceSection(section.key);
@@ -185,6 +251,7 @@ export class WestBankDigestPanel extends Panel {
           <span class="westbank-digest-chip">${sourceCount} sources</span>
           ${topPlaces.map((place) => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
         </div>
+        ${renderHealthSummary(digest.sourceHealth)}
         ${health.length > 0 ? `<div class="westbank-health-row">${health.map(renderHealthChip).join('')}</div>` : ''}
         <div class="westbank-digest-sections">${sectionHtml}</div>
       </div>

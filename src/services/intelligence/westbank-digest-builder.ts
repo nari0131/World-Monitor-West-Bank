@@ -7,7 +7,7 @@ import {
   clusterWestBankItems,
   createEmptyWestBankDigestResponse,
 } from './westbank-cluster.ts';
-import { buildWestBankSourceHealth } from './westbank-source-health.ts';
+import { buildWestBankFailureSourceHealth, buildWestBankSourceHealth } from './westbank-source-health.ts';
 
 export function buildWestBankDigestFromSeed(seedDigest: ListFeedDigestResponse): WestBankDigestResponse {
   const normalizedItems = normalizeWestBankSeedDigest(seedDigest);
@@ -19,5 +19,11 @@ export function buildWestBankDigestFromSeed(seedDigest: ListFeedDigestResponse):
   response.sourceHealth = buildWestBankSourceHealth(seedDigest, normalizedItems);
   response.mapEvents = buildWestBankMapEvents(clusters);
 
+  return response;
+}
+
+export function createWestBankDigestFailureResponse(error: unknown): WestBankDigestResponse {
+  const response = createEmptyWestBankDigestResponse();
+  response.sourceHealth = buildWestBankFailureSourceHealth(error);
   return response;
 }

@@ -3,8 +3,10 @@ import type {
 } from '../../../../src/generated/server/worldmonitor/news/v1/service_server.ts';
 import type { WestBankDigestResponse } from '../../../../src/types/westbank.ts';
 import { listFeedDigest } from '../../news/v1/list-feed-digest.ts';
-import { createEmptyWestBankDigestResponse } from '../../../../src/services/intelligence/westbank-cluster.ts';
-import { buildWestBankDigestFromSeed } from '../../../../src/services/intelligence/westbank-digest-builder.ts';
+import {
+  buildWestBankDigestFromSeed,
+  createWestBankDigestFailureResponse,
+} from '../../../../src/services/intelligence/westbank-digest-builder.ts';
 
 export interface GetWestBankDigestRequest {
   lang?: string;
@@ -21,7 +23,7 @@ export async function getWestBankDigest(
   try {
     const seedDigest = await listFeedDigest(ctx, { variant: 'westbank', lang });
     return buildWestBankDigestFromSeed(seedDigest);
-  } catch {
-    return createEmptyWestBankDigestResponse();
+  } catch (error) {
+    return createWestBankDigestFailureResponse(error);
   }
 }

@@ -29,6 +29,17 @@ export type WestBankDigestSectionKey =
 
 export type WestBankSourceHealthStatus = 'ok' | 'degraded' | 'down';
 
+export type WestBankSourceHealthCode =
+  | 'healthy'
+  | 'pending_integration'
+  | 'empty_window'
+  | 'no_mapped_items'
+  | 'stale_cache'
+  | 'upstream_timeout'
+  | 'relay_unavailable'
+  | 'proxy_missing'
+  | 'digest_unavailable';
+
 export interface WestBankSourceDefinition {
   id: string;
   name: string;
@@ -97,6 +108,7 @@ export interface WestBankSourceHealth {
   sourceId: string;
   sourceName: string;
   status: WestBankSourceHealthStatus;
+  code: WestBankSourceHealthCode;
   staleMinutes?: number;
   message?: string;
 }

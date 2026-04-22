@@ -23269,15 +23269,55 @@ body.map-width-resizing {
   gap: 8px;
 }
 
+.westbank-health-summary {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(234, 179, 8, 0.24);
+  background: linear-gradient(180deg, rgba(234, 179, 8, 0.1), rgba(234, 179, 8, 0.03));
+}
+
+.westbank-health-summary--down {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.1), rgba(248, 113, 113, 0.03));
+}
+
+.westbank-health-summary-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.westbank-health-summary-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
 .westbank-health-chip {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 11px;
   border: 1px solid var(--border);
   background: var(--surface-2, rgba(255, 255, 255, 0.03));
   color: var(--text-dim);
+}
+
+.westbank-health-chip__source {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.westbank-health-chip__detail {
+  color: currentColor;
 }
 
 .westbank-health-chip--ok {
