@@ -1023,18 +1023,8 @@ function applyAiClassification(
 }
 
 async function resolveAvailableAiProvider(): Promise<AiProviderName | null> {
-  const [{ getProviderCredentials }, { isProviderAvailable }] = await Promise.all([
-    import('../server/_shared/llm'),
-    import('../server/_shared/llm-health'),
-  ]);
-
-  for (const provider of AI_PROVIDER_CHAIN) {
-    const credentials = getProviderCredentials(provider);
-    if (!credentials) continue;
-    if (await isProviderAvailable(credentials.apiUrl)) return provider;
-  }
-
-  return null;
+  const { resolveAvailableWestBankAiProvider } = await import('../src/services/intelligence/westbank-ai-runtime');
+  return resolveAvailableWestBankAiProvider(AI_PROVIDER_CHAIN);
 }
 
 async function runWithConcurrency<T>(
@@ -1061,8 +1051,8 @@ async function classifyWestBankItemWithAi(
   ctx: IntelligenceServerContext,
   item: NormalizedWestBankItem,
 ): Promise<WestBankAiClassification | null> {
-  const { classifyEvent: classifyEventRpc } = await import('../server/worldmonitor/intelligence/v1/classify-event');
-  const response = await classifyEventRpc(ctx, {
+  const { classifyWestBankEventWithAi } = await import('../src/services/intelligence/westbank-ai-runtime');
+  const response = await classifyWestBankEventWithAi(ctx, {
     title: item.title,
     description: item.placeLabel ?? '',
     source: item.sourceName,
@@ -1118,13 +1108,13 @@ async function summarizeWestBankClusterWithAi(
   provider: AiProviderName,
   lang: string,
 ): Promise<string | undefined> {
-  const { summarizeArticle: summarizeArticleRpc } = await import('../server/worldmonitor/news/v1/summarize-article');
+  const { summarizeWestBankHeadlinesWithAi } = await import('../src/services/intelligence/westbank-ai-runtime');
   const headlines = [...new Set(cluster.items.map((item) => item.title.trim()).filter(Boolean))]
     .slice(0, AI_SUMMARY_HEADLINE_LIMIT);
 
   if (headlines.length === 0) return undefined;
 
-  const response = await summarizeArticleRpc(ctx, {
+  const response = await summarizeWestBankHeadlinesWithAi(ctx, {
     provider,
     headlines,
     mode: 'brief',
