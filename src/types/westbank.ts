@@ -57,6 +57,7 @@ export interface WestBankSourceItem {
   sourceName: string;
   sourceType: WestBankSourceType;
   verification: VerificationClass;
+  sourceCount?: number;
   title: string;
   link: string;
   publishedAt: string;

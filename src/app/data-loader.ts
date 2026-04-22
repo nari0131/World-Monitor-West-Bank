@@ -1,7 +1,7 @@
 import type { AppContext, AppModule } from '@/app/app-context';
 import { getRpcBaseUrl } from '@/services/rpc-client';
 import { enqueuePanelCall } from '@/app/pending-panel-data';
-import type { ClusteredEvent, NewsItem, MapLayers, SocialUnrestEvent } from '@/types';
+import type { ClusteredEvent, NewsItem, MapLayers, SocialUnrestEvent, WestBankDigestResponse } from '@/types';
 import type { MarketData } from '@/types';
 import type { TimeRange } from '@/components';
 import {
@@ -80,6 +80,7 @@ import {
   fetchCriticalMinerals,
   fetchSanctionsPressure,
   fetchRadiationWatch,
+  fetchWestBankDigest,
 } from '@/services';
 import { getMarketWatchlistEntries } from '@/services/market-watchlist';
 import { fetchStockAnalysesForTargets, getStockAnalysisTargets, type StockAnalysisResult } from '@/services/stock-analysis';
@@ -418,6 +419,18 @@ export class DataLoaderManager implements AppModule {
 
   private isAnyPanelNearViewport(panelIds: string[], marginPx = 400): boolean {
     return panelIds.some((panelId) => this.isPanelNearViewport(panelId, marginPx));
+  }
+
+  private async tryFetchWestBankDigest(): Promise<WestBankDigestResponse | null> {
+    try {
+      return await fetchWestBankDigest(
+        getCurrentLanguage(),
+        AbortSignal.timeout(this.digestRequestTimeoutMs),
+      );
+    } catch (error) {
+      console.warn('[WestBank] Dedicated digest fetch failed, using client fallback:', error);
+      return null;
+    }
   }
 
   async loadAllData(forceAll = false): Promise<void> {
@@ -1173,12 +1186,33 @@ export class DataLoaderManager implements AppModule {
       }
     }
 
+    let westbankDigest: WestBankDigestResponse | null = null;
+    if (SITE_VARIANT === 'westbank') {
+      westbankDigest = await this.tryFetchWestBankDigest();
+      this.ctx.westbankDigest = westbankDigest;
+    }
+
     this.ctx.allNews = collectedNews;
     this.ctx.initialLoadComplete = true;
     mountCommunityWidget();
 
     if (SITE_VARIANT === 'westbank') {
-      this.callPanel('westbank-digest', 'setItems', selectWestBankDigestItems(this.filterItemsByTimeRange(this.ctx.allNews)));
+      if (westbankDigest) {
+        this.callPanel('westbank-digest', 'setDigest', westbankDigest, this.ctx.currentTimeRange);
+        this.ctx.map?.setNewsLocations(
+          westbankDigest.mapEvents
+            .filter((event): event is typeof event & { lat: number; lon: number } => event.lat != null && event.lon != null)
+            .map((event) => ({
+              lat: event.lat,
+              lon: event.lon,
+              title: event.title,
+              threatLevel: event.threatLevel ?? 'info',
+              timestamp: new Date(event.publishedAt),
+            })),
+        );
+      } else {
+        this.callPanel('westbank-digest', 'setItems', selectWestBankDigestItems(this.filterItemsByTimeRange(this.ctx.allNews)));
+      }
     }
 
     this.ctx.map?.updateHotspotActivity(this.ctx.allNews);
@@ -1212,10 +1246,14 @@ export class DataLoaderManager implements AppModule {
           timestamp: c.lastUpdated,
         }));
 
-      if (SITE_VARIANT === 'westbank') {
+      if (SITE_VARIANT === 'westbank' && westbankDigest) {
+        this.callPanel('westbank-digest', 'setDigest', westbankDigest, this.ctx.currentTimeRange);
+      } else if (SITE_VARIANT === 'westbank') {
         this.callPanel('westbank-digest', 'setClusters', summaryClusters);
       }
-      this.ctx.map?.setNewsLocations(geoLocated);
+      if (!(SITE_VARIANT === 'westbank' && westbankDigest)) {
+        this.ctx.map?.setNewsLocations(geoLocated);
+      }
     } catch (error) {
       console.error('[App] Clustering failed, clusters unchanged:', error);
       const insightsPanel = this.ctx.panels['insights'] as InsightsPanel | undefined;

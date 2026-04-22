@@ -722,6 +722,7 @@ export class App {
       latestMarkets: [],
       latestPredictions: [],
       latestClusters: [],
+      westbankDigest: null,
       intelligenceCache: {},
       cyberThreatsCache: null,
       disabledSources,

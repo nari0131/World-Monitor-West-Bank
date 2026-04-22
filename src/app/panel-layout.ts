@@ -1501,7 +1501,9 @@ export class PanelLayoutManager implements AppModule {
 
     if (SITE_VARIANT === 'westbank') {
       const digestPanel = this.ctx.panels['westbank-digest'] as WestBankDigestPanel | undefined;
-      if (this.ctx.latestClusters.length > 0) {
+      if (this.ctx.westbankDigest) {
+        digestPanel?.setDigest(this.ctx.westbankDigest, this.ctx.currentTimeRange);
+      } else if (this.ctx.latestClusters.length > 0) {
         const digestClusters = selectWestBankThreatClusters(this.filterClustersByTimeRange(this.ctx.latestClusters));
         digestPanel?.setClusters(digestClusters);
       } else {

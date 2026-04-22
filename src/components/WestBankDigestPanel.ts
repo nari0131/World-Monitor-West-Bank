@@ -1,5 +1,12 @@
 import { Panel } from './Panel';
-import type { ClusteredEvent, NewsItem, ThreatLevel } from '@/types';
+import type {
+  ClusteredEvent,
+  NewsItem,
+  ThreatLevel,
+  WestBankDigestResponse,
+  WestBankSourceHealth,
+  WestBankSourceItem,
+} from '@/types';
 import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { extractWestBankPlaces, extractWestBankPlacesFromCluster, WESTBANK_WATCHLIST } from '@/config/westbank-focus';
 
@@ -10,6 +17,8 @@ const THREAT_LABELS: Record<ThreatLevel, string> = {
   low: 'Low',
   info: 'Info',
 };
+
+type DigestTimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';
 
 function formatRecency(date: Date): string {
   const diffMs = Date.now() - date.getTime();
@@ -22,6 +31,37 @@ function formatRecency(date: Date): string {
 
 function renderThreatBadge(level: ThreatLevel): string {
   return `<span class="westbank-digest-threat westbank-digest-threat--${level}">${escapeHtml(THREAT_LABELS[level])}</span>`;
+}
+
+function getRangeCutoff(range: DigestTimeRange): number {
+  const ranges: Record<DigestTimeRange, number> = {
+    '1h': 60 * 60 * 1000,
+    '6h': 6 * 60 * 60 * 1000,
+    '24h': 24 * 60 * 60 * 1000,
+    '48h': 48 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+    all: Number.POSITIVE_INFINITY,
+  };
+  return ranges[range];
+}
+
+function filterDigestItemsByRange(items: WestBankSourceItem[], range: DigestTimeRange): WestBankSourceItem[] {
+  if (range === 'all') return items;
+  const cutoff = Date.now() - getRangeCutoff(range);
+  return items.filter((item) => {
+    const publishedAt = new Date(item.publishedAt).getTime();
+    return !Number.isFinite(publishedAt) || publishedAt >= cutoff;
+  });
+}
+
+function renderVerificationBadge(verification: WestBankSourceItem['verification']): string {
+  return `<span class="westbank-digest-chip westbank-digest-chip--verification">${escapeHtml(verification)}</span>`;
+}
+
+function renderHealthChip(health: WestBankSourceHealth): string {
+  const stale = health.staleMinutes != null ? ` · ${health.staleMinutes}m` : '';
+  const detail = health.message ? ` title="${escapeHtml(health.message)}"` : '';
+  return `<span class="westbank-health-chip westbank-health-chip--${health.status}"${detail}>${escapeHtml(health.sourceName)}${escapeHtml(stale)}</span>`;
 }
 
 export class WestBankDigestPanel extends Panel {
@@ -42,9 +82,87 @@ export class WestBankDigestPanel extends Panel {
         <div class="westbank-digest-empty">
           <p class="westbank-digest-empty-title">${escapeHtml(message)}</p>
           <div class="westbank-digest-watchlist">
-            ${WESTBANK_WATCHLIST.slice(0, 8).map(place => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
+            ${WESTBANK_WATCHLIST.slice(0, 8).map((place) => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
           </div>
         </div>
+      </div>
+    `);
+  }
+
+  public setDigest(digest: WestBankDigestResponse, range: DigestTimeRange = 'all'): void {
+    const sections = digest.sections
+      .map((section) => ({
+        ...section,
+        items: filterDigestItemsByRange(section.items, range),
+      }))
+      .filter((section) => section.items.length > 0);
+
+    const visibleItems = new Map<string, WestBankSourceItem>();
+    sections.forEach((section) => {
+      section.items.forEach((item) => visibleItems.set(item.id, item));
+    });
+
+    const items = [...visibleItems.values()];
+    this.setCount(items.length);
+
+    if (items.length === 0) {
+      this.renderEmpty('No mapped West Bank incidents in the active time window.');
+      return;
+    }
+
+    const sourceCount = new Set(items.map((item) => item.sourceId)).size;
+    const topPlaces = [...new Set(items.map((item) => item.placeLabel).filter(Boolean))].slice(0, 4);
+    const health = digest.sourceHealth
+      .filter((entry) => entry.status !== 'ok' || entry.staleMinutes == null || entry.staleMinutes > 30)
+      .slice(0, 6);
+
+    const sectionHtml = sections.map((section) => {
+      const cards = section.items.map((item) => {
+        const meta = [
+          item.sourceName,
+          formatRecency(new Date(item.publishedAt)),
+          item.sourceCount ? `${item.sourceCount} source${item.sourceCount === 1 ? '' : 's'}` : null,
+          item.placeLabel ?? null,
+        ].filter((value): value is string => !!value);
+
+        return `
+          <article class="westbank-digest-card westbank-digest-card--sectioned">
+            <div class="westbank-digest-card-body">
+              <div class="westbank-digest-card-head">
+                ${renderThreatBadge(item.threatLevel ?? 'info')}
+                ${renderVerificationBadge(item.verification)}
+              </div>
+              <a class="westbank-digest-title" href="${sanitizeUrl(item.link)}" target="_blank" rel="noopener">
+                ${escapeHtml(item.title)}
+              </a>
+              <div class="westbank-digest-meta">
+                ${meta.map((value) => `<span class="westbank-digest-meta-item">${escapeHtml(value)}</span>`).join('')}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      return `
+        <section class="westbank-digest-section">
+          <div class="westbank-digest-section-head">
+            <h4 class="westbank-digest-section-title">${escapeHtml(section.label)}</h4>
+            <span class="westbank-digest-chip">${section.items.length}</span>
+          </div>
+          <div class="westbank-digest-section-list">${cards}</div>
+        </section>
+      `;
+    }).join('');
+
+    this.setContent(`
+      <div class="westbank-digest">
+        <div class="westbank-digest-summary">
+          <span class="westbank-digest-chip">${items.length} incident summaries</span>
+          <span class="westbank-digest-chip">${sourceCount} sources</span>
+          ${topPlaces.map((place) => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
+        </div>
+        ${health.length > 0 ? `<div class="westbank-health-row">${health.map(renderHealthChip).join('')}</div>` : ''}
+        <div class="westbank-digest-sections">${sectionHtml}</div>
       </div>
     `);
   }
@@ -57,8 +175,8 @@ export class WestBankDigestPanel extends Panel {
       return;
     }
 
-    const sourceCount = new Set(items.map(item => item.source)).size;
-    const topPlaces = [...new Set(items.flatMap(item => extractWestBankPlaces(item)))].slice(0, 4);
+    const sourceCount = new Set(items.map((item) => item.source)).size;
+    const topPlaces = [...new Set(items.flatMap((item) => extractWestBankPlaces(item)))].slice(0, 4);
 
     const cards = items.map((item, index) => {
       const places = extractWestBankPlaces(item);
@@ -76,7 +194,7 @@ export class WestBankDigestPanel extends Panel {
               ${escapeHtml(item.title)}
             </a>
             <div class="westbank-digest-meta">
-              ${meta.map(value => `<span class="westbank-digest-meta-item">${escapeHtml(value)}</span>`).join('')}
+              ${meta.map((value) => `<span class="westbank-digest-meta-item">${escapeHtml(value)}</span>`).join('')}
             </div>
           </div>
         </article>
@@ -88,7 +206,7 @@ export class WestBankDigestPanel extends Panel {
         <div class="westbank-digest-summary">
           <span class="westbank-digest-chip">${items.length} relevant reports</span>
           <span class="westbank-digest-chip">${sourceCount} sources</span>
-          ${topPlaces.map(place => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
+          ${topPlaces.map((place) => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
         </div>
         <div class="westbank-digest-list">${cards}</div>
       </div>
@@ -103,8 +221,8 @@ export class WestBankDigestPanel extends Panel {
       return;
     }
 
-    const sourceCount = new Set(clusters.flatMap(cluster => cluster.allItems.map(item => item.source))).size;
-    const topPlaces = [...new Set(clusters.flatMap(cluster => extractWestBankPlacesFromCluster(cluster)))].slice(0, 4);
+    const sourceCount = new Set(clusters.flatMap((cluster) => cluster.allItems.map((item) => item.source))).size;
+    const topPlaces = [...new Set(clusters.flatMap((cluster) => extractWestBankPlacesFromCluster(cluster)))].slice(0, 4);
 
     const cards = clusters.map((cluster, index) => {
       const threatLevel = cluster.threat?.level ?? 'info';
@@ -132,7 +250,7 @@ export class WestBankDigestPanel extends Panel {
               ${escapeHtml(cluster.primaryTitle)}
             </a>
             <div class="westbank-digest-meta">
-              ${meta.map(value => `<span class="westbank-digest-meta-item">${escapeHtml(value)}</span>`).join('')}
+              ${meta.map((value) => `<span class="westbank-digest-meta-item">${escapeHtml(value)}</span>`).join('')}
             </div>
           </div>
         </article>
@@ -144,7 +262,7 @@ export class WestBankDigestPanel extends Panel {
         <div class="westbank-digest-summary">
           <span class="westbank-digest-chip">${clusters.length} mapped incidents</span>
           <span class="westbank-digest-chip">${sourceCount} sources</span>
-          ${topPlaces.map(place => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
+          ${topPlaces.map((place) => `<span class="westbank-digest-chip">${escapeHtml(place)}</span>`).join('')}
         </div>
         <div class="westbank-digest-list">${cards}</div>
       </div>

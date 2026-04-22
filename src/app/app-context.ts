@@ -1,4 +1,4 @@
-import type { InternetOutage, SocialUnrestEvent, MilitaryFlight, MilitaryFlightCluster, MilitaryVessel, MilitaryVesselCluster, USNIFleetReport, PanelConfig, MapLayers, NewsItem, MarketData, ClusteredEvent, CyberThreat, Monitor } from '@/types';
+import type { InternetOutage, SocialUnrestEvent, MilitaryFlight, MilitaryFlightCluster, MilitaryVessel, MilitaryVesselCluster, USNIFleetReport, PanelConfig, MapLayers, NewsItem, MarketData, ClusteredEvent, CyberThreat, Monitor, WestBankDigestResponse } from '@/types';
 import type { AirportDelayAlert, PositionSample } from '@/services/aviation';
 import type { IranEvent } from '@/generated/client/worldmonitor/conflict/v1/service_client';
 import type { SanctionsPressureResult } from '@/services/sanctions-pressure';
@@ -42,6 +42,7 @@ export interface AppContext {
   latestMarkets: MarketData[];
   latestPredictions: import('@/services/prediction').PredictionMarket[];
   latestClusters: ClusteredEvent[];
+  westbankDigest: WestBankDigestResponse | null;
   intelligenceCache: IntelligenceCache;
   cyberThreatsCache: CyberThreat[] | null;
 
