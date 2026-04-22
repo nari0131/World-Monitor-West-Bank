@@ -49,6 +49,7 @@ import type { TrafficAnomaly as ProtoTrafficAnomaly, DdosLocationHit } from '@/g
 import type { DiseaseOutbreakItem } from '@/services/disease-outbreaks';
 import type { GetChokepointStatusResponse } from '@/services/supply-chain';
 import type { ScenarioVisualState, ScenarioResult } from '@/config/scenario-templates';
+import type { WestBankThreatMarker as WestBankThreatMarkerData } from '@/types/westbank';
 import { getAuthState } from '@/services/auth-state';
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { trackGateHit } from '@/services/analytics';
@@ -138,6 +139,7 @@ export class MapContainer {
   private cachedCyberThreats: CyberThreat[] | null = null;
   private cachedIranEvents: IranEvent[] | null = null;
   private cachedNewsLocations: NewsLocationMarker[] | null = null;
+  private cachedWestBankThreats: WestBankThreatMarkerData[] | null = null;
   private cachedPositiveEvents: PositiveGeoEvent[] | null = null;
   private cachedKindnessData: KindnessPoint[] | null = null;
   private cachedHappinessScores: HappinessData | null = null;
@@ -309,6 +311,7 @@ export class MapContainer {
     if (this.cachedCyberThreats) this.setCyberThreats(this.cachedCyberThreats);
     if (this.cachedIranEvents) this.setIranEvents(this.cachedIranEvents);
     if (this.cachedNewsLocations) this.setNewsLocations(this.cachedNewsLocations);
+    if (this.cachedWestBankThreats) this.setWestBankThreats(this.cachedWestBankThreats);
     if (this.cachedPositiveEvents) this.setPositiveEvents(this.cachedPositiveEvents);
     if (this.cachedKindnessData) this.setKindnessData(this.cachedKindnessData);
     if (this.cachedHappinessScores) this.setHappinessScores(this.cachedHappinessScores);
@@ -644,6 +647,16 @@ export class MapContainer {
       this.deckGLMap?.setNewsLocations(data);
     } else {
       this.svgMap?.setNewsLocations(data);
+    }
+  }
+
+  public setWestBankThreats(data: WestBankThreatMarkerData[]): void {
+    this.cachedWestBankThreats = data;
+    if (this.useGlobe) { this.globeMap?.setWestBankThreats(data); return; }
+    if (this.useDeckGL) {
+      this.deckGLMap?.setWestBankThreats(data);
+    } else {
+      this.svgMap?.setWestBankThreats(data);
     }
   }
 
@@ -1086,6 +1099,7 @@ export class MapContainer {
     this.cachedCyberThreats = null;
     this.cachedIranEvents = null;
     this.cachedNewsLocations = null;
+    this.cachedWestBankThreats = null;
     this.cachedPositiveEvents = null;
     this.cachedKindnessData = null;
     this.cachedHappinessScores = null;

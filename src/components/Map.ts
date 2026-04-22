@@ -62,6 +62,7 @@ import { getCountryAtCoordinates, getCountryBbox } from '@/services/country-geom
 import type { CountryClickPayload } from './DeckGLMap';
 import { t } from '@/services/i18n';
 import type { ScenarioVisualState } from '@/config/scenario-templates';
+import type { WestBankThreatMarker } from '@/types/westbank';
 
 export type TimeRange = '1h' | '6h' | '24h' | '48h' | '7d' | 'all';
 export type MapView = 'global' | 'america' | 'mena' | 'eu' | 'asia' | 'latam' | 'africa' | 'oceania';
@@ -3994,6 +3995,16 @@ export class MapComponent {
   public setNewsLocations(_data: Array<{ lat: number; lon: number; title: string; threatLevel: string; timestamp?: Date }>): void {
     // SVG fallback: news locations rendered as simple circles
     // For now, skip on SVG map to keep mobile lightweight
+  }
+
+  public setWestBankThreats(data: WestBankThreatMarker[]): void {
+    this.setNewsLocations(data.map((threat) => ({
+      lat: threat.lat,
+      lon: threat.lon,
+      title: threat.title,
+      threatLevel: threat.threatLevel,
+      timestamp: new Date(threat.publishedAt),
+    })));
   }
 
   public setTechActivity(activities: TechHubActivity[]): void {

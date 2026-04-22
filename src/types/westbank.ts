@@ -71,6 +71,22 @@ export interface WestBankSourceItem {
   rawSourceName?: string;
 }
 
+export interface WestBankThreatMarker {
+  id: string;
+  lat: number;
+  lon: number;
+  title: string;
+  sourceName: string;
+  verification: VerificationClass;
+  sourceCount: number;
+  threatLevel: WestBankThreatLevel;
+  publishedAt: string;
+  url: string;
+  placeLabel?: string;
+  category?: WestBankEventCategory;
+  excerpt?: string;
+}
+
 export interface WestBankDigestSection {
   key: WestBankDigestSectionKey;
   label: string;

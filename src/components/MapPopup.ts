@@ -25,6 +25,7 @@ import { sparkline } from '@/utils/sparkline';
 import { getAuthState } from '@/services/auth-state';
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { trackGateHit } from '@/services/analytics';
+import type { WestBankThreatMarker } from '@/types/westbank';
 
 // ── Static HS2 sector breakdown per chokepoint ────────────────────────────────
 // Based on IEA/UNCTAD estimated trade composition. Updated periodically.
@@ -74,7 +75,7 @@ function formatPositionSource(source: string): string {
 function fmtUtcTime(utc: string | undefined): string {
   if (!utc) return '\u2014';
   const d = new Date(utc.includes('T') ? utc : utc.replace(' ', 'T') + 'Z');
-  return isNaN(d.getTime()) ? '\u2014' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(d.getTime()) ? '\u2014' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function fmtDelayMin(min: number | undefined): string {
@@ -82,7 +83,7 @@ function fmtDelayMin(min: number | undefined): string {
   return `<span style="color:${min > 0 ? '#f97316' : '#22c55e'};font-size:10px;margin-left:3px">${min > 0 ? '+' : ''}${min}m</span>`;
 }
 
-export type PopupType = 'conflict' | 'hotspot' | 'earthquake' | 'weather' | 'base' | 'waterway' | 'apt' | 'cyberThreat' | 'nuclear' | 'economic' | 'irradiator' | 'pipeline' | 'cable' | 'cable-advisory' | 'repair-ship' | 'outage' | 'datacenter' | 'datacenterCluster' | 'ais' | 'protest' | 'protestCluster' | 'flight' | 'aircraft' | 'militaryFlight' | 'militaryVessel' | 'militaryFlightCluster' | 'militaryVesselCluster' | 'natEvent' | 'port' | 'spaceport' | 'mineral' | 'startupHub' | 'cloudRegion' | 'techHQ' | 'accelerator' | 'techEvent' | 'techHQCluster' | 'techEventCluster' | 'techActivity' | 'geoActivity' | 'stockExchange' | 'financialCenter' | 'centralBank' | 'commodityHub' | 'iranEvent' | 'gpsJamming' | 'radiation';
+export type PopupType = 'conflict' | 'hotspot' | 'earthquake' | 'weather' | 'base' | 'waterway' | 'apt' | 'cyberThreat' | 'nuclear' | 'economic' | 'irradiator' | 'pipeline' | 'cable' | 'cable-advisory' | 'repair-ship' | 'outage' | 'datacenter' | 'datacenterCluster' | 'ais' | 'protest' | 'protestCluster' | 'flight' | 'aircraft' | 'militaryFlight' | 'militaryVessel' | 'militaryFlightCluster' | 'militaryVesselCluster' | 'natEvent' | 'port' | 'spaceport' | 'mineral' | 'startupHub' | 'cloudRegion' | 'techHQ' | 'accelerator' | 'techEvent' | 'techHQCluster' | 'techEventCluster' | 'techActivity' | 'geoActivity' | 'stockExchange' | 'financialCenter' | 'centralBank' | 'commodityHub' | 'iranEvent' | 'gpsJamming' | 'radiation' | 'westbankThreat';
 
 interface TechEventPopupData {
   id: string;
@@ -211,7 +212,7 @@ interface DatacenterClusterData {
 
 interface PopupData {
   type: PopupType;
-  data: ConflictZone | Hotspot | Earthquake | WeatherAlert | MilitaryBase | StrategicWaterway | APTGroup | CyberThreat | NuclearFacility | EconomicCenter | GammaIrradiator | Pipeline | UnderseaCable | CableAdvisory | RepairShip | InternetOutage | AIDataCenter | AisDisruptionEvent | SocialUnrestEvent | AirportDelayAlert | PositionSample | MilitaryFlight | MilitaryVessel | MilitaryFlightCluster | MilitaryVesselCluster | NaturalEvent | Port | Spaceport | CriticalMineralProject | StartupHub | CloudRegion | TechHQ | Accelerator | TechEventPopupData | TechHQClusterData | TechEventClusterData | ProtestClusterData | DatacenterClusterData | TechHubActivity | GeoHubActivity | StockExchangePopupData | FinancialCenterPopupData | CentralBankPopupData | CommodityHubPopupData | IranEventPopupData | GpsJammingPopupData | RadiationObservation;
+  data: ConflictZone | Hotspot | Earthquake | WeatherAlert | MilitaryBase | StrategicWaterway | APTGroup | CyberThreat | NuclearFacility | EconomicCenter | GammaIrradiator | Pipeline | UnderseaCable | CableAdvisory | RepairShip | InternetOutage | AIDataCenter | AisDisruptionEvent | SocialUnrestEvent | AirportDelayAlert | PositionSample | MilitaryFlight | MilitaryVessel | MilitaryFlightCluster | MilitaryVesselCluster | NaturalEvent | Port | Spaceport | CriticalMineralProject | StartupHub | CloudRegion | TechHQ | Accelerator | TechEventPopupData | TechHQClusterData | TechEventClusterData | ProtestClusterData | DatacenterClusterData | TechHubActivity | GeoHubActivity | StockExchangePopupData | FinancialCenterPopupData | CentralBankPopupData | CommodityHubPopupData | IranEventPopupData | GpsJammingPopupData | RadiationObservation | WestBankThreatMarker;
   relatedNews?: NewsItem[];
   x: number;
   y: number;
@@ -674,6 +675,8 @@ export class MapPopup {
         return this.renderGpsJammingPopup(data.data as GpsJammingPopupData);
       case 'radiation':
         return this.renderRadiationPopup(data.data as RadiationObservation);
+      case 'westbankThreat':
+        return this.renderWestBankThreatPopup(data.data as WestBankThreatMarker);
       default:
         return '';
     }
@@ -3334,6 +3337,57 @@ ${isFeatureAvailable('wingbitsEnrichment') ? '<div class="wingbits-live-section"
         </div>
         ${relatedHtml}
         ${safeUrl ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer nofollow" class="popup-link">${t('popups.source')} →</a>` : ''}
+      </div>
+    `;
+  }
+
+  private renderWestBankThreatPopup(threat: WestBankThreatMarker): string {
+    const severityClass = threat.threatLevel === 'critical'
+      ? 'critical'
+      : threat.threatLevel === 'high'
+        ? 'high'
+        : threat.threatLevel === 'medium'
+          ? 'medium'
+          : 'low';
+    const timeAgo = threat.publishedAt ? this.getTimeAgo(new Date(threat.publishedAt)) : '';
+    const safeUrl = sanitizeUrl(threat.url);
+    const verificationLabel = threat.verification.replace(/-/g, ' ');
+
+    return `
+      <div class="popup-header conflict ${severityClass}">
+        <span class="popup-title">${escapeHtml(threat.title)}</span>
+        <span class="popup-badge ${severityClass}">${escapeHtml(threat.threatLevel.toUpperCase())}</span>
+        <button class="popup-close" aria-label="Close">×</button>
+      </div>
+      <div class="popup-body">
+        <div class="popup-stats">
+          ${threat.placeLabel ? `<div class="popup-stat">
+            <span class="stat-label">${t('popups.location')}</span>
+            <span class="stat-value">${escapeHtml(threat.placeLabel)}</span>
+          </div>` : ''}
+          <div class="popup-stat">
+            <span class="stat-label">${t('popups.source')}</span>
+            <span class="stat-value">${escapeHtml(threat.sourceName)}</span>
+          </div>
+          <div class="popup-stat">
+            <span class="stat-label">Verification</span>
+            <span class="stat-value">${escapeHtml(verificationLabel)}</span>
+          </div>
+          <div class="popup-stat">
+            <span class="stat-label">Sources</span>
+            <span class="stat-value">${threat.sourceCount}</span>
+          </div>
+          ${timeAgo ? `<div class="popup-stat">
+            <span class="stat-label">${t('popups.time')}</span>
+            <span class="stat-value">${escapeHtml(timeAgo)}</span>
+          </div>` : ''}
+          ${threat.category ? `<div class="popup-stat">
+            <span class="stat-label">${t('popups.type')}</span>
+            <span class="stat-value">${escapeHtml(threat.category)}</span>
+          </div>` : ''}
+        </div>
+        ${threat.excerpt ? `<p class="popup-description">${escapeHtml(threat.excerpt)}</p>` : ''}
+        ${safeUrl ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer nofollow" class="popup-link">${t('popups.source')} →</a>` : ''}
       </div>
     `;
   }

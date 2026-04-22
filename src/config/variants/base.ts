@@ -12,6 +12,7 @@ export const IDLE_PAUSE_MS = 5 * 60 * 1000;
 // Refresh intervals (ms) - shared across all variants
 export const REFRESH_INTERVALS = {
   feeds: 20 * 60 * 1000,
+  westbankThreats: 3 * 60 * 1000,
   markets: 12 * 60 * 1000,
   crypto: 12 * 60 * 1000,
   predictions: 15 * 60 * 1000,

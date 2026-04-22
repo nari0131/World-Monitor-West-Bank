@@ -1211,7 +1211,11 @@ export class App {
 
   private setupRefreshIntervals(): void {
     // Always refresh news for all variants
-    this.refreshScheduler.scheduleRefresh('news', () => this.dataLoader.loadNews(), REFRESH_INTERVALS.feeds);
+    this.refreshScheduler.scheduleRefresh(
+      'news',
+      () => this.dataLoader.loadNews(),
+      SITE_VARIANT === 'westbank' ? REFRESH_INTERVALS.westbankThreats : REFRESH_INTERVALS.feeds,
+    );
 
     // Happy variant only refreshes news -- skip all geopolitical/financial/military refreshes
     if (SITE_VARIANT !== 'happy') {

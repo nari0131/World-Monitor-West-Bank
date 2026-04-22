@@ -52,6 +52,7 @@ import type { WebcamEntry, WebcamCluster } from '@/generated/client/worldmonitor
 import type { TrafficAnomaly as ProtoTrafficAnomaly, DdosLocationHit } from '@/generated/client/worldmonitor/infrastructure/v1/service_client';
 import type { RadiationObservation } from '@/services/radiation';
 import type { ScenarioVisualState } from '@/config/scenario-templates';
+import type { WestBankThreatMarker } from '@/types/westbank';
 
 const SAT_COUNTRY_COLORS: Record<string, string> = { CN: '#ff2020', RU: '#ff8800', US: '#4488ff', EU: '#44cc44', KR: '#aa66ff', IN: '#ff66aa', TR: '#ff4466', OTHER: '#ccccff' };
 const SAT_TYPE_EMOJI: Record<string, string> = { sar: '\u{1F4E1}', optical: '\u{1F4F7}', military: '\u{1F396}', sigint: '\u{1F4FB}' };
@@ -3023,6 +3024,15 @@ export class GlobeMap {
         threatLevel: d.threatLevel ?? 'info',
       }));
     this.flushMarkers();
+  }
+  public setWestBankThreats(data: WestBankThreatMarker[]): void {
+    this.setNewsLocations((data ?? []).map((threat) => ({
+      lat: threat.lat,
+      lon: threat.lon,
+      title: threat.title,
+      threatLevel: threat.threatLevel,
+      timestamp: new Date(threat.publishedAt),
+    })));
   }
   public setPositiveEvents(_events: any[]): void {}
   public setKindnessData(_points: any[]): void {}

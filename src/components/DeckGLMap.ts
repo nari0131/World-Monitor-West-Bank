@@ -118,6 +118,7 @@ import type { HappinessData } from '@/services/happiness-data';
 import type { RenewableInstallation } from '@/services/renewable-installations';
 import type { SpeciesRecovery } from '@/services/conservation-data';
 import { getCountriesGeoJson, getCountryAtCoordinates, getCountryBbox, getCountryCentroid } from '@/services/country-geometry';
+import type { WestBankThreatMarker } from '@/types/westbank';
 import type { DiseaseOutbreakItem } from '@/services/disease-outbreaks';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { ResilienceRankingItem } from '@/services/resilience';
@@ -389,6 +390,37 @@ const TRADE_ANIMATION_SPEED = 0.3;
 const TRADE_GC_INTERPOLATION_POINTS = 20;
 const CHOKEPOINT_PULSE_FREQ = 0.01;
 const CHOKEPOINT_PULSE_AMP = 0.3;
+const WESTBANK_THREAT_PULSE_WINDOW_MS = 30 * 60 * 1000;
+const WESTBANK_THREAT_FADE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const THREAT_RGB: Record<string, [number, number, number]> = {
+  critical: [239, 68, 68],
+  high: [249, 115, 22],
+  medium: [234, 179, 8],
+  low: [34, 197, 94],
+  info: [59, 130, 246],
+};
+const THREAT_ALPHA: Record<string, number> = {
+  critical: 220,
+  high: 190,
+  medium: 160,
+  low: 120,
+  info: 80,
+};
+
+function getThreatRadiusMeters(level: string): number {
+  switch (level) {
+    case 'critical':
+      return 26000;
+    case 'high':
+      return 22000;
+    case 'medium':
+      return 18000;
+    case 'low':
+      return 15000;
+    default:
+      return 13000;
+  }
+}
 
 export class DeckGLMap {
   private static readonly MAX_CLUSTER_LEAVES = 200;
@@ -439,6 +471,7 @@ export class DeckGLMap {
   private aircraftFetchTimer: ReturnType<typeof setInterval> | null = null;
   private news: NewsItem[] = [];
   private newsLocations: Array<{ lat: number; lon: number; title: string; threatLevel: string; timestamp?: Date }> = [];
+  private westbankThreats: WestBankThreatMarker[] = [];
   private newsLocationFirstSeen = new Map<string, number>();
   private ucdpEvents: UcdpGeoEvent[] = [];
   private displacementFlows: DisplacementFlow[] = [];
@@ -994,6 +1027,13 @@ export class DeckGLMap {
       if (now - ts < 30_000) return true;
     }
     return false;
+  }
+
+  private hasRecentWestBankThreat(now = Date.now()): boolean {
+    return this.westbankThreats.some((threat) => {
+      const ts = this.parseTime(threat.publishedAt);
+      return ts != null && (now - ts) < WESTBANK_THREAT_PULSE_WINDOW_MS;
+    });
   }
 
   private getTimeRangeMs(range: TimeRange = this.state.timeRange): number {
@@ -1839,8 +1879,10 @@ export class DeckGLMap {
       }));
     }
 
-    // News geo-locations (always shown if data exists)
-    if (this.newsLocations.length > 0) {
+    // West Bank uses a dedicated incident layer. Other variants keep the generic news markers.
+    if (SITE_VARIANT === 'westbank' && this.westbankThreats.length > 0) {
+      layers.push(...this.createWestBankThreatLayer());
+    } else if (this.newsLocations.length > 0) {
       layers.push(...this.createNewsLocationsLayer());
     }
 
@@ -3292,6 +3334,7 @@ export class DeckGLMap {
 
   private needsPulseAnimation(now = Date.now()): boolean {
     return this.hasRecentNews(now)
+      || this.hasRecentWestBankThreat(now)
       || this.hasRecentRiot(now)
       || this.hotspots.some(h => h.hasBreaking)
       || this.positiveEvents.some(e => e.count > 10)
@@ -3339,21 +3382,6 @@ export class DeckGLMap {
     const zoom = this.maplibreMap?.getZoom() || 2;
     const alphaScale = zoom < 2.5 ? 0.4 : zoom < 4 ? 0.7 : 1.0;
     const filteredNewsLocations = this.filterByTime(this.newsLocations, (location) => location.timestamp);
-    const THREAT_RGB: Record<string, [number, number, number]> = {
-      critical: [239, 68, 68],
-      high: [249, 115, 22],
-      medium: [234, 179, 8],
-      low: [34, 197, 94],
-      info: [59, 130, 246],
-    };
-    const THREAT_ALPHA: Record<string, number> = {
-      critical: 220,
-      high: 190,
-      medium: 160,
-      low: 120,
-      info: 80,
-    };
-
     const now = this.pulseTime || Date.now();
     const PULSE_DURATION = 30_000;
 
@@ -3400,6 +3428,68 @@ export class DeckGLMap {
           const fadeOut = Math.max(0, 1 - age / PULSE_DURATION);
           const a = Math.round(150 * fadeOut * alphaScale);
           return [...rgb, a] as [number, number, number, number];
+        },
+        lineWidthMinPixels: 1.5,
+        updateTriggers: { pulseTime: now },
+      }));
+    }
+
+    return layers;
+  }
+
+  private createWestBankThreatLayer(): ScatterplotLayer[] {
+    const zoom = this.maplibreMap?.getZoom() || 2;
+    const alphaScale = zoom < 7 ? 0.75 : zoom < 9 ? 0.9 : 1.0;
+    const filteredThreats = this.filterByTime(this.westbankThreats, (threat) => threat.publishedAt);
+    const now = this.pulseTime || Date.now();
+    const fadeWindowMs = this.state.timeRange === 'all'
+      ? WESTBANK_THREAT_FADE_WINDOW_MS
+      : Math.min(this.getTimeRangeMs(), WESTBANK_THREAT_FADE_WINDOW_MS);
+
+    const layers: ScatterplotLayer[] = [
+      new ScatterplotLayer({
+        id: 'westbank-threats-layer',
+        data: filteredThreats,
+        getPosition: (d) => [d.lon, d.lat],
+        getRadius: (d) => getThreatRadiusMeters(d.threatLevel),
+        getFillColor: (d) => {
+          const rgb = THREAT_RGB[d.threatLevel] || THREAT_RGB.info;
+          const baseAlpha = THREAT_ALPHA[d.threatLevel] || THREAT_ALPHA.info;
+          const ts = this.parseTime(d.publishedAt);
+          const age = ts == null ? 0 : Math.max(0, now - ts);
+          const fade = ts == null ? 1 : Math.max(0.35, 1 - Math.min(age, fadeWindowMs) / fadeWindowMs * 0.65);
+          return [...rgb, Math.round(baseAlpha * alphaScale * fade)] as [number, number, number, number];
+        },
+        radiusMinPixels: 5,
+        radiusMaxPixels: 18,
+        pickable: true,
+      }),
+    ];
+
+    const recentThreats = filteredThreats.filter((threat) => {
+      const ts = this.parseTime(threat.publishedAt);
+      return ts != null && (now - ts) < WESTBANK_THREAT_PULSE_WINDOW_MS;
+    });
+
+    if (recentThreats.length > 0) {
+      const pulse = 1.0 + 1.1 * (0.5 + 0.5 * Math.sin(now / 360));
+      layers.push(new ScatterplotLayer({
+        id: 'westbank-threats-pulse-layer',
+        data: recentThreats,
+        getPosition: (d) => [d.lon, d.lat],
+        getRadius: (d) => getThreatRadiusMeters(d.threatLevel),
+        radiusScale: pulse,
+        radiusMinPixels: 8,
+        radiusMaxPixels: 34,
+        pickable: false,
+        stroked: true,
+        filled: false,
+        getLineColor: (d) => {
+          const rgb = THREAT_RGB[d.threatLevel] || THREAT_RGB.info;
+          const ts = this.parseTime(d.publishedAt) || now;
+          const age = now - ts;
+          const fadeOut = Math.max(0, 1 - age / WESTBANK_THREAT_PULSE_WINDOW_MS);
+          return [...rgb, Math.round(180 * fadeOut * alphaScale)] as [number, number, number, number];
         },
         lineWidthMinPixels: 1.5,
         updateTriggers: { pulseTime: now },
@@ -3871,6 +3961,14 @@ export class DeckGLMap {
         return { html: `<div class="deckgl-tooltip"><strong>${t('popups.cyberThreat.title')}</strong><br/>${text(obj.severity || t('components.deckgl.tooltip.medium'))} · ${text(obj.country || t('popups.unknown'))}</div>` };
       case 'iran-events-layer':
         return { html: `<div class="deckgl-tooltip"><strong>${t('components.deckgl.layers.iranAttacks')}: ${text(obj.category || '')}</strong><br/>${text((obj.title || '').slice(0, 80))}</div>` };
+      case 'westbank-threats-layer': {
+        const meta = [
+          obj.placeLabel || '',
+          obj.sourceName || '',
+          obj.sourceCount ? `${obj.sourceCount} source${obj.sourceCount === 1 ? '' : 's'}` : '',
+        ].filter(Boolean).join(' · ');
+        return { html: `<div class="deckgl-tooltip"><strong>${text(obj.title?.slice(0, 80) || '')}</strong><br/>${text(meta)}</div>` };
+      }
       case 'news-locations-layer':
         return { html: `<div class="deckgl-tooltip"><strong>📰 ${t('components.deckgl.tooltip.news')}</strong><br/>${text(obj.title?.slice(0, 80) || '')}</div>` };
       case 'positive-events-layer': {
@@ -4168,6 +4266,7 @@ export class DeckGLMap {
       'outages-layer': 'outage',
       'cyber-threats-layer': 'cyberThreat',
       'iran-events-layer': 'iranEvent',
+      'westbank-threats-layer': 'westbankThreat',
       'protests-layer': 'protest',
       'military-flights-layer': 'militaryFlight',
       'military-vessels-layer': 'militaryVessel',
@@ -5682,6 +5781,12 @@ export class DeckGLMap {
     this.render();
 
     this.syncPulseAnimation(now);
+  }
+
+  public setWestBankThreats(data: WestBankThreatMarker[]): void {
+    this.westbankThreats = data;
+    this.render();
+    this.syncPulseAnimation();
   }
 
   public setPositiveEvents(events: PositiveGeoEvent[]): void {

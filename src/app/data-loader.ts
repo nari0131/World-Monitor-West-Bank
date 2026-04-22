@@ -118,6 +118,7 @@ import { fetchUnhcrPopulation } from '@/services/displacement';
 import { fetchClimateAnomalies } from '@/services/climate';
 import { fetchSecurityAdvisories } from '@/services/security-advisories';
 import { fetchThermalEscalations } from '@/services/thermal-escalation';
+import { buildWestBankThreatMarkers } from '@/services/intelligence/westbank-threat-markers';
 import { fetchCrossSourceSignals } from '@/services/cross-source-signals';
 import { fetchTelegramFeed } from '@/services/telegram-intel';
 import { fetchOrefAlerts, startOrefPolling, stopOrefPolling, onOrefAlertsUpdate } from '@/services/oref-alerts';
@@ -1199,18 +1200,10 @@ export class DataLoaderManager implements AppModule {
     if (SITE_VARIANT === 'westbank') {
       if (westbankDigest) {
         this.callPanel('westbank-digest', 'setDigest', westbankDigest, this.ctx.currentTimeRange);
-        this.ctx.map?.setNewsLocations(
-          westbankDigest.mapEvents
-            .filter((event): event is typeof event & { lat: number; lon: number } => event.lat != null && event.lon != null)
-            .map((event) => ({
-              lat: event.lat,
-              lon: event.lon,
-              title: event.title,
-              threatLevel: event.threatLevel ?? 'info',
-              timestamp: new Date(event.publishedAt),
-            })),
-        );
+        this.ctx.map?.setWestBankThreats(buildWestBankThreatMarkers(westbankDigest.mapEvents));
+        this.ctx.map?.setNewsLocations([]);
       } else {
+        this.ctx.map?.setWestBankThreats([]);
         this.callPanel('westbank-digest', 'setItems', selectWestBankDigestItems(this.filterItemsByTimeRange(this.ctx.allNews)));
       }
     }
@@ -1252,6 +1245,9 @@ export class DataLoaderManager implements AppModule {
         this.callPanel('westbank-digest', 'setClusters', summaryClusters);
       }
       if (!(SITE_VARIANT === 'westbank' && westbankDigest)) {
+        if (SITE_VARIANT === 'westbank') {
+          this.ctx.map?.setWestBankThreats([]);
+        }
         this.ctx.map?.setNewsLocations(geoLocated);
       }
     } catch (error) {
