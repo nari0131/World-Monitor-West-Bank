@@ -7,6 +7,8 @@ import type {
 
 export const config = { runtime: 'nodejs' };
 
+const DEFAULT_WORLDMONITOR_UPSTREAM_BASE_URL = 'https://www.worldmonitor.app';
+
 type VerificationClass = 'official' | 'corroborated' | 'single-source' | 'unresolved';
 type WestBankSourceType = 'rss' | 'telegram' | 'oref' | 'acled' | 'gdelt';
 type WestBankThreatLevel = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -962,8 +964,25 @@ export function buildWestBankDigestFromSeed(
   return response;
 }
 
-function createInternalRpcHeaders(req: NodeRequest): Record<string, string> {
-  const origin = getRequestOrigin(req);
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/$/, '');
+}
+
+export function getWorldMonitorUpstreamBaseUrl(): string {
+  const configured = process.env.WORLDMONITOR_UPSTREAM_BASE_URL?.trim();
+  if (configured) {
+    return normalizeBaseUrl(configured);
+  }
+
+  return DEFAULT_WORLDMONITOR_UPSTREAM_BASE_URL;
+}
+
+function getWorldMonitorUpstreamOrigin(): string {
+  return getWorldMonitorUpstreamBaseUrl();
+}
+
+function createWorldMonitorUpstreamHeaders(): Record<string, string> {
+  const origin = getWorldMonitorUpstreamOrigin();
   const operatorKey = getOperatorApiKey();
 
   return {
@@ -980,9 +999,11 @@ async function postInternalRpc<TRequest, TResponse>(
   path: string,
   body: TRequest,
 ): Promise<TResponse> {
-  const response = await fetch(new URL(path, getRequestOrigin(req)).toString(), {
+  void req;
+
+  const response = await fetch(new URL(path, getWorldMonitorUpstreamBaseUrl()).toString(), {
     method: 'POST',
-    headers: createInternalRpcHeaders(req),
+    headers: createWorldMonitorUpstreamHeaders(),
     body: JSON.stringify(body),
     cache: 'no-store',
   });
@@ -1371,8 +1392,10 @@ async function fetchWestBankSeedDigestFromRss(lang: string): Promise<SeedDigest>
 }
 
 async function fetchWestBankSeedDigestFromGateway(req: NodeRequest, lang: string): Promise<SeedDigest> {
-  const origin = getRequestOrigin(req);
-  const url = new URL('/api/news/v1/list-feed-digest', origin);
+  void req;
+
+  const origin = getWorldMonitorUpstreamOrigin();
+  const url = new URL('/api/news/v1/list-feed-digest', getWorldMonitorUpstreamBaseUrl());
   url.searchParams.set('variant', 'westbank');
   url.searchParams.set('lang', lang);
   const operatorKey = getOperatorApiKey();

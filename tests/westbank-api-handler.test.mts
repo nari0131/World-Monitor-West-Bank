@@ -5,6 +5,7 @@ import {
   buildWestBankDigestFromSeed,
   buildWestBankDigestFromSeedWithAi,
   createWestBankDigestFailureResponse,
+  getWorldMonitorUpstreamBaseUrl,
   getRequestOrigin,
 } from '../api/westbank-digest.ts';
 
@@ -71,6 +72,30 @@ test('west bank digest api helper prefers forwarded host metadata for same-origi
   });
 
   assert.equal(origin, 'https://world-monitor-west-bank.vercel.app');
+});
+
+test('west bank digest api helper defaults upstream fetches to worldmonitor app', () => {
+  const previous = process.env.WORLDMONITOR_UPSTREAM_BASE_URL;
+  delete process.env.WORLDMONITOR_UPSTREAM_BASE_URL;
+
+  try {
+    assert.equal(getWorldMonitorUpstreamBaseUrl(), 'https://www.worldmonitor.app');
+  } finally {
+    if (previous == null) delete process.env.WORLDMONITOR_UPSTREAM_BASE_URL;
+    else process.env.WORLDMONITOR_UPSTREAM_BASE_URL = previous;
+  }
+});
+
+test('west bank digest api helper allows overriding upstream fetch base url', () => {
+  const previous = process.env.WORLDMONITOR_UPSTREAM_BASE_URL;
+  process.env.WORLDMONITOR_UPSTREAM_BASE_URL = 'https://api.worldmonitor.app/';
+
+  try {
+    assert.equal(getWorldMonitorUpstreamBaseUrl(), 'https://api.worldmonitor.app');
+  } finally {
+    if (previous == null) delete process.env.WORLDMONITOR_UPSTREAM_BASE_URL;
+    else process.env.WORLDMONITOR_UPSTREAM_BASE_URL = previous;
+  }
 });
 
 test('west bank digest api helper applies AI classification and summaries fail-soft', async () => {
