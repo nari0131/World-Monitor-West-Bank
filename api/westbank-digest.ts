@@ -1024,8 +1024,8 @@ function applyAiClassification(
 
 async function resolveAvailableAiProvider(): Promise<AiProviderName | null> {
   const [{ getProviderCredentials }, { isProviderAvailable }] = await Promise.all([
-    import('../server/_shared/llm.ts'),
-    import('../server/_shared/llm-health.ts'),
+    import('../server/_shared/llm'),
+    import('../server/_shared/llm-health'),
   ]);
 
   for (const provider of AI_PROVIDER_CHAIN) {
@@ -1061,7 +1061,7 @@ async function classifyWestBankItemWithAi(
   ctx: IntelligenceServerContext,
   item: NormalizedWestBankItem,
 ): Promise<WestBankAiClassification | null> {
-  const { classifyEvent: classifyEventRpc } = await import('../server/worldmonitor/intelligence/v1/classify-event.ts');
+  const { classifyEvent: classifyEventRpc } = await import('../server/worldmonitor/intelligence/v1/classify-event');
   const response = await classifyEventRpc(ctx, {
     title: item.title,
     description: item.placeLabel ?? '',
@@ -1118,7 +1118,7 @@ async function summarizeWestBankClusterWithAi(
   provider: AiProviderName,
   lang: string,
 ): Promise<string | undefined> {
-  const { summarizeArticle: summarizeArticleRpc } = await import('../server/worldmonitor/news/v1/summarize-article.ts');
+  const { summarizeArticle: summarizeArticleRpc } = await import('../server/worldmonitor/news/v1/summarize-article');
   const headlines = [...new Set(cluster.items.map((item) => item.title.trim()).filter(Boolean))]
     .slice(0, AI_SUMMARY_HEADLINE_LIMIT);
 
